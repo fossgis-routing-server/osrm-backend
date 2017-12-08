@@ -109,33 +109,67 @@ void filterCandidates(const std::vector<util::Coordinate> &coordinates,
     }
 }
 
-void ElongateInternalRouteResult(InternalRouteResult &base_result, InternalRouteResult &new_result, std::size_t ups_index)
+void ElongateInternalRouteResult(InternalRouteResult &base_result,
+                                 InternalRouteResult &new_result,
+                                 std::size_t ups_index)
 {
     BOOST_ASSERT(base_result.is_valid());
     BOOST_ASSERT(new_result.is_valid());
-    bool new_leg = base_result.unpacked_path_segments.size() - 1 >= ups_index;
-    if (new_leg) base_result.unpacked_path_segments.push_back({});
+    // In an InternalRouteResult object, each entry of the unpacked_path_segments vector
+    // represents a leg of the route. When merging two InternalRouteResult objects, it's
+    // ambiguous to which leg the new object's unpacked_path_segments should be added.
+    // The `ups_index` value indcates to which unpacked_path_segment entry to elongate
+    BOOST_ASSERT(ups_index <= base_result.unpacked_path_segments.size());
+    // start a new leg in the base_result if the ups_index doesn't exist yet
+    bool new_leg = ups_index == base_result.unpacked_path_segments.size();
+    if (new_leg)
+        base_result.unpacked_path_segments.push_back({});
+
+    // collect all the iterators for writing
     auto new_segments_begin = new_result.unpacked_path_segments[ups_index].begin();
     auto new_src_reverse_begin = new_result.source_traversed_in_reverse.begin();
     auto new_trg_reverse_begin = new_result.target_traversed_in_reverse.begin();
     auto new_src_reverse_end = new_result.source_traversed_in_reverse.end();
     auto new_trg_reverse_end = new_result.target_traversed_in_reverse.end();
     auto new_segments_end = new_result.unpacked_path_segments[ups_index].end();
-    // if the base result ends where the new one starts, deduplicate
-    if (base_result.unpacked_path_segments[ups_index].back().turn_via_node == new_result.unpacked_path_segments[ups_index].front().turn_via_node) // FIXME there must be a better way to make this check
+    // if the base result path segments end where the new ones' start, deduplicate by
+    // moving the source write iterators (from the new_result) forward one
+    if (base_result.unpacked_path_segments[ups_index].back().turn_via_node ==
+        new_result.unpacked_path_segments[ups_index]
+            .front()
+            .turn_via_node) // FIXME there must be a better way to make this check
     {
         new_segments_begin++;
-        new_src_reverse_begin++; // ?? what is this actually
+        new_src_reverse_begin++;
         new_trg_reverse_begin++;
     }
-    std::move(new_segments_begin, new_segments_end, std::back_inserter(base_result.unpacked_path_segments[ups_index]));
-    std::move(new_src_reverse_begin, new_src_reverse_end, std::back_inserter(base_result.source_traversed_in_reverse));
-    std::move(new_trg_reverse_begin, new_trg_reverse_end, std::back_inserter(base_result.target_traversed_in_reverse));
-    base_result.shortest_path_weight = base_result.shortest_path_weight + new_result.shortest_path_weight;
+    std::move(new_segments_begin,
+              new_segments_end,
+              std::back_inserter(base_result.unpacked_path_segments[ups_index]));
+    std::move(new_src_reverse_begin,
+              new_src_reverse_end,
+              std::back_inserter(base_result.source_traversed_in_reverse));
+    std::move(new_trg_reverse_begin,
+              new_trg_reverse_end,
+              std::back_inserter(base_result.target_traversed_in_reverse));
+    base_result.shortest_path_weight =
+        base_result.shortest_path_weight + new_result.shortest_path_weight;
     if (new_leg)
     {
-        // if this is a new leg, insert the last phantom_node pair of the new_result into the base_result segment_end_coordinates
-        // otherwise, replace the last segment_end_coordinate with the last one in the new_result segment_end_coordinates
+        // if this is a new leg, insert the phantom_node pair of the new_result into the
+        // base_result segment_end_coordinates
+        BOOST_ASSERT(base_result.segment_end_coordinates.back().target_phantom ==
+                     new_result.segment_end_coordinates.front().source_phantom);
+        BOOST_ASSERT(base_result.segment_end_coordinates.size() - 1 == ups_index);
+        base_result.segment_end_coordinates.push_back(
+            std::move(new_result.segment_end_coordinates.front()));
+    }
+    else
+    {
+        // otherwise, replace the last segment_end_coordinate with the last one in the new_result
+        // segment_end_coordinates
+        base_result.segment_end_coordinates.back().target_phantom =
+            new_result.segment_end_coordinates.front().target_phantom;
     }
 }
 
@@ -254,11 +288,14 @@ Status MatchPlugin::HandleRequest(const RoutingAlgorithmsInterface &algorithms,
     for (const auto waypoint : parameter_waypoints)
     {
         bool found = false;
-        std::for_each(sub_matchings.begin(), sub_matchings.end(), [&](SubMatching &sm) {
+        std::for_each(sub_matchings.begin(), sub_matchings.end(), [&](const SubMatching &sm) {
             auto index = std::find(sm.indices.begin(), sm.indices.end(), waypoint);
-            if (index != sm.indices.end()) found = true;
+            if (index != sm.indices.end())
+                found = true;
         });
-        if (!found) return Error("NoMatch", "Requested waypoint parameter could not be matched.", json_result);
+        if (!found)
+            return Error(
+                "NoMatch", "Requested waypoint parameter could not be matched.", json_result);
     }
 
     std::vector<InternalRouteResult> sub_routes(sub_matchings.size());
@@ -272,17 +309,22 @@ Status MatchPlugin::HandleRequest(const RoutingAlgorithmsInterface &algorithms,
         PhantomNodes current_phantom_node_pair;
         for (unsigned i = 0; i < sub_matchings[index].nodes.size() - 1; ++i)
         {
-            // start a new leg if the sub_matching index being processed is a user requested waypoint
+            // start a new leg if the sub_matching index being processed is a user requested
+            // waypoint
             // TODO ... make this into a function
-            bool new_leg =  std::find(parameter_waypoints.begin(), parameter_waypoints.end(), sub_matchings[index].indices[i]) != parameter_waypoints.end();
+            bool new_leg = std::find(parameter_waypoints.begin(),
+                                     parameter_waypoints.end(),
+                                     sub_matchings[index].indices[i]) != parameter_waypoints.end();
             current_phantom_node_pair.source_phantom = sub_matchings[index].nodes[i];
             current_phantom_node_pair.target_phantom = sub_matchings[index].nodes[i + 1];
             BOOST_ASSERT(current_phantom_node_pair.source_phantom.IsValid());
             BOOST_ASSERT(current_phantom_node_pair.target_phantom.IsValid());
             // force uturns to be on
-            // we split the phantom nodes anyway and only have bi-directional phantom nodes for possible uturns
+            // we split the phantom nodes anyway and only have bi-directional phantom nodes for
+            // possible uturns
             std::vector<PhantomNodes> current_coords{current_phantom_node_pair};
-            InternalRouteResult current_sub_result = algorithms.ShortestPathSearch(current_coords, {false});
+            InternalRouteResult current_sub_result =
+                algorithms.ShortestPathSearch(current_coords, {false});
             if (i == 0)
             {
                 // start new route object, entry in sub_routes should be empty
@@ -294,7 +336,8 @@ Status MatchPlugin::HandleRequest(const RoutingAlgorithmsInterface &algorithms,
                 BOOST_ASSERT(sub_routes[index].is_valid());
                 // start new leg in InternalRouteResult
                 auto number_of_legs = sub_routes[index].unpacked_path_segments.size();
-                ElongateInternalRouteResult(sub_routes[index], current_sub_result, number_of_legs + 1);
+                ElongateInternalRouteResult(
+                    sub_routes[index], current_sub_result, number_of_legs + 1);
             }
             else
             {
