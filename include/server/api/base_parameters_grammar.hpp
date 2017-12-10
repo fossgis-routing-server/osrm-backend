@@ -77,7 +77,9 @@ struct BaseParametersGrammar : boost::spirit::qi::grammar<Iterator, Signature>
     {
         const auto add_hint = [](engine::api::BaseParameters &base_parameters,
                                  const boost::optional<std::string> &hint_string) {
-            if (hint_string)
+            // Ignore hint, because an invalid hint can crash the routing server
+            //                 v
+            if (hint_string && 0)
             {
                 base_parameters.hints.emplace_back(engine::Hint::FromBase64(hint_string.get()));
             }
