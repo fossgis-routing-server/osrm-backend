@@ -71,17 +71,19 @@ TurnType::Enum IntersectionHandler::findBasicTurnType(const EdgeID via_edge,
     if (!on_ramp && onto_ramp)
         return TurnType::OnRamp;
 
-    const auto &in_name =
+    const auto &in_name_id =
         node_data_container.GetAnnotation(node_based_graph.GetEdgeData(via_edge).annotation_data)
             .name_id;
-    const auto &out_name =
+    const auto &out_name_id =
         node_data_container.GetAnnotation(node_based_graph.GetEdgeData(road.eid).annotation_data)
             .name_id;
+    const auto &in_name_empty = name_table.GetNameForID(in_name_id).empty();
+    const auto &out_name_empty = name_table.GetNameForID(out_name_id).empty();
 
     const auto same_name = !util::guidance::requiresNameAnnounced(
-        in_name, out_name, name_table, street_name_suffix_table);
+        in_name_id, out_name_id, name_table, street_name_suffix_table);
 
-    if (in_name != EMPTY_NAMEID && out_name != EMPTY_NAMEID && same_name)
+    if (!in_name_empty && !out_name_empty && same_name)
     {
         return TurnType::Continue;
     }
@@ -488,8 +490,8 @@ bool IntersectionHandler::isSameName(const EdgeID source_edge_id, const EdgeID t
     const auto &target_edge_data = node_data_container.GetAnnotation(
         node_based_graph.GetEdgeData(target_edge_id).annotation_data);
 
-    return source_edge_data.name_id != EMPTY_NAMEID && //
-           target_edge_data.name_id != EMPTY_NAMEID && //
+    return !name_table.GetNameForID(source_edge_data.name_id).empty() && //
+           !name_table.GetNameForID(target_edge_data.name_id).empty() && //
            !util::guidance::requiresNameAnnounced(source_edge_data.name_id,
                                                   target_edge_data.name_id,
                                                   name_table,

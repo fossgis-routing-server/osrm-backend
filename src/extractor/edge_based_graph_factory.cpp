@@ -375,7 +375,9 @@ EdgeBasedGraphFactory::GenerateEdgeExpandedNodes(const WayRestrictionMap &way_re
             m_edge_based_node_container.nodes[edge_based_node_id].segregated =
                 segregated_edges.count(eid) > 0;
 
-            m_edge_based_node_weights.push_back(m_edge_based_node_weights[eid]);
+            const auto ebn_weight = m_edge_based_node_weights[nbe_to_ebn_mapping[eid]];
+            BOOST_ASSERT(ebn_weight == INVALID_EDGE_WEIGHT || ebn_weight == edge_data.weight);
+            m_edge_based_node_weights.push_back(ebn_weight);
 
             edge_based_node_id++;
             progress.PrintStatus(progress_counter++);
@@ -580,7 +582,7 @@ void EdgeBasedGraphFactory::GenerateEdgeExpandedEdges(
             ExtractionTurn extracted_turn(
                 turn.angle,
                 m_node_based_graph.GetOutDegree(node_at_center_of_intersection),
-                turn.instruction.direction_modifier == guidance::DirectionModifier::UTurn,
+                turn.instruction.IsUTurn(),
                 is_traffic_light,
                 edge_data1.flags.restricted,
                 edge_data2.flags.restricted,

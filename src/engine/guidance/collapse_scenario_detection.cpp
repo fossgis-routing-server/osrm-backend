@@ -41,15 +41,14 @@ bool noIntermediaryIntersections(const RouteStep &step)
 }
 
 // Link roads, as far as we are concerned, are short unnamed segments between to named segments.
-bool isLinkroad(const RouteStep &pre_link_step,
+bool isLinkRoad(const RouteStep &pre_link_step,
                 const RouteStep &link_step,
                 const RouteStep &post_link_step)
 {
     const constexpr double MAX_LINK_ROAD_LENGTH = 2 * MAX_COLLAPSE_DISTANCE;
     const auto is_short = link_step.distance <= MAX_LINK_ROAD_LENGTH;
-    const auto unnamed = link_step.name_id == EMPTY_NAMEID;
-    const auto between_named =
-        (pre_link_step.name_id != EMPTY_NAMEID) && (post_link_step.name_id != EMPTY_NAMEID);
+    const auto unnamed = link_step.name.empty();
+    const auto between_named = !pre_link_step.name.empty() && !post_link_step.name.empty();
 
     return is_short && unnamed && between_named && noIntermediaryIntersections(link_step);
 }
@@ -196,7 +195,7 @@ bool isUTurn(const RouteStepIterator step_prior_to_intersection,
     const auto only_allowed_turn = (numberOfAllowedTurns(*step_leaving_intersection) == 1) &&
                                    noIntermediaryIntersections(*step_entering_intersection);
 
-    return collapsable || isLinkroad(*step_prior_to_intersection,
+    return collapsable || isLinkRoad(*step_prior_to_intersection,
                                      *step_entering_intersection,
                                      *step_leaving_intersection) ||
            only_allowed_turn;

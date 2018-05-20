@@ -1372,3 +1372,64 @@ Feature: Simple Turns
             | waypoints | route        | turns                           |
             | a,d       | ab,bcd,bcd   | depart,fork slight right,arrive |
             | a,g       | ab,befg,befg | depart,fork slight left,arrive  |
+
+    # https://www.openstreetmap.org/#map=18/52.25130/10.42545
+    Scenario: Turn for roads with no name, ref changes
+        Given the node map
+            """
+              d
+              .
+              .
+            e c . . f
+              .
+              .
+              b
+              .
+              .
+              a
+            """
+
+        And the ways
+            | nodes | highway     | ref  | name          |
+            | abc   | tertiary    | K 57 |               |
+            | cd    | tertiary    | K 56 |               |
+            | cf    | tertiary    | K 56 |               |
+            | ce    | residential |      | Heinrichshöhe |
+
+       When I route I should get
+            | waypoints | route     | turns                    |
+            | a,f       | ,,        | depart,turn right,arrive |
+
+    # https://www.openstreetmap.org/#map=18/52.24071/10.29066
+    Scenario: Turn for roads with no name, ref changes
+        Given the node map
+            """
+              x
+              .
+              .
+              d
+             . .
+            .   .
+           .     .
+     e. . t . c . p. .f
+           .     .
+            .   .
+             . .
+              b
+              .
+              .
+              a
+            """
+
+        And the ways
+            | nodes | highway     | ref  | name          | oneway |
+            | abp   | tertiary    | K 23 |               | yes    |
+            | pdx   | tertiary    | K 23 |               | yes    |
+            | xdt   | tertiary    | K 23 |               | yes    |
+            | tba   | tertiary    | K 23 |               | yes    |
+            | etcpf | primary     | B 1  |               | no     |
+
+       When I route I should get
+            | waypoints | route     | turns                                    |
+            | e,x       | ,,,       | depart,turn sharp left,turn right,arrive |
+            | f,a       | ,,        | depart,turn left,arrive                  |

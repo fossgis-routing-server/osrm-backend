@@ -295,7 +295,8 @@ RoundaboutType RoundaboutHandler::getRoundaboutType(const NodeID nid) const
                     return SPECIAL_EDGEID;
                 }
 
-                if (EMPTY_NAMEID != edge_data.name_id)
+                const auto &edge_name_empty = name_table.GetNameForID(edge_data.name_id).empty();
+                if (!edge_name_empty)
                 {
 
                     const auto announce = [&](unsigned id) {
@@ -306,7 +307,6 @@ RoundaboutType RoundaboutHandler::getRoundaboutType(const NodeID nid) const
                     if (std::all_of(begin(roundabout_name_ids), end(roundabout_name_ids), announce))
                         roundabout_name_ids.insert(edge_data.name_id);
                 }
-
                 continue_edge = edge_id;
             }
             else if (!edge.flags.roundabout && !edge.flags.circular)
