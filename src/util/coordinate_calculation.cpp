@@ -5,6 +5,8 @@
 
 #include <boost/assert.hpp>
 
+#include <mapbox/cheap_ruler.hpp>
+
 #include <algorithm>
 #include <iterator>
 #include <limits>
@@ -18,6 +20,44 @@ namespace util
 namespace coordinate_calculation
 {
 
+namespace
+{
+class CheapRulerContainer
+{
+  public:
+    CheapRulerContainer(const int number_of_rulers)
+        : cheap_ruler_cache(number_of_rulers, mapbox::cheap_ruler::CheapRuler(0)),
+          step(90.0 * COORDINATE_PRECISION / number_of_rulers)
+    {
+        for (int n = 0; n < number_of_rulers; n++)
+        {
+            cheap_ruler_cache[n] = mapbox::cheap_ruler::CheapRuler(
+                step * (n + 0.5) / COORDINATE_PRECISION, mapbox::cheap_ruler::CheapRuler::Meters);
+        }
+    };
+
+    mapbox::cheap_ruler::CheapRuler &getRuler(const FixedLatitude lat_1, const FixedLatitude lat_2)
+    {
+        auto lat = (lat_1 + lat_2) / util::FixedLatitude{2};
+        return getRuler(lat);
+    }
+
+    mapbox::cheap_ruler::CheapRuler &getRuler(const FixedLatitude lat)
+    {
+        BOOST_ASSERT(step > 2);
+        // the |lat| > 0  ->  |lat|-1 > -1  ->  (|lat|-1)/step > -1/step > -1/2 >= -1  ->  bin >= 0
+        std::size_t bin = (std::abs(static_cast<int>(lat)) - 1) / step;
+        BOOST_ASSERT(bin < cheap_ruler_cache.size());
+        return cheap_ruler_cache[bin];
+    };
+
+  private:
+    std::vector<mapbox::cheap_ruler::CheapRuler> cheap_ruler_cache;
+    const int step;
+};
+static CheapRulerContainer cheap_ruler_container(1800);
+} // namespace
+
 // Does not project the coordinates!
 std::uint64_t squaredEuclideanDistance(const Coordinate lhs, const Coordinate rhs)
 {
@@ -30,6 +70,20 @@ std::uint64_t squaredEuclideanDistance(const Coordinate lhs, const Coordinate rh
     std::uint64_t result = static_cast<std::uint64_t>(sq_lon + sq_lat);
 
     return result;
+}
+
+// Uses method described here:
+// https://www.gpo.gov/fdsys/pkg/CFR-2005-title47-vol4/pdf/CFR-2005-title47-vol4-sec73-208.pdf
+// should be within 0.1% or so of Vincenty method (assuming 19 buckets are enough)
+// Should be more faster and more precise than Haversine
+double fccApproximateDistance(const Coordinate coordinate_1, const Coordinate coordinate_2)
+{
+    const auto lon1 = static_cast<double>(util::toFloating(coordinate_1.lon));
+    const auto lat1 = static_cast<double>(util::toFloating(coordinate_1.lat));
+    const auto lon2 = static_cast<double>(util::toFloating(coordinate_2.lon));
+    const auto lat2 = static_cast<double>(util::toFloating(coordinate_2.lat));
+    return cheap_ruler_container.getRuler(coordinate_1.lat, coordinate_2.lat)
+        .distance({lon1, lat1}, {lon2, lat2});
 }
 
 double haversineDistance(const Coordinate coordinate_1, const Coordinate coordinate_2)
@@ -423,6 +477,6 @@ double computeArea(const std::vector<Coordinate> &polygon)
     return area / 2.;
 }
 
-} // ns coordinate_calculation
-} // ns util
-} // ns osrm
+} // namespace coordinate_calculation
+} // namespace util
+} // namespace osrm

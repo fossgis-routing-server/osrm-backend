@@ -133,7 +133,6 @@ class ContiguousInternalMemoryDataFacadeBase : public BaseDataFacade
     using RTreeNode = SharedRTree::TreeNode;
 
     extractor::ClassData exclude_mask;
-    std::string m_timestamp;
     extractor::ProfileProperties *m_profile_properties;
     extractor::Datasources *m_datasources;
 
@@ -283,13 +282,13 @@ class ContiguousInternalMemoryDataFacadeBase : public BaseDataFacade
         return segment_data.GetReverseDatasources(id);
     }
 
-    TurnPenalty GetWeightPenaltyForEdgeID(const unsigned id) const override final
+    TurnPenalty GetWeightPenaltyForEdgeID(const EdgeID id) const override final
     {
         BOOST_ASSERT(m_turn_weight_penalties.size() > id);
         return m_turn_weight_penalties[id];
     }
 
-    TurnPenalty GetDurationPenaltyForEdgeID(const unsigned id) const override final
+    TurnPenalty GetDurationPenaltyForEdgeID(const EdgeID id) const override final
     {
         BOOST_ASSERT(m_turn_duration_penalties.size() > id);
         return m_turn_duration_penalties[id];
@@ -622,7 +621,6 @@ class ContiguousInternalMemoryDataFacade<CH>
                                        const std::size_t exclude_index)
         : ContiguousInternalMemoryDataFacadeBase(allocator, metric_name, exclude_index),
           ContiguousInternalMemoryAlgorithmDataFacade<CH>(allocator, metric_name, exclude_index)
-
     {
     }
 };
@@ -684,16 +682,36 @@ template <> class ContiguousInternalMemoryAlgorithmDataFacade<MLD> : public Algo
         return query_graph.GetOutDegree(n);
     }
 
+    EdgeRange GetAdjacentEdgeRange(const NodeID node) const override final
+    {
+        return query_graph.GetAdjacentEdgeRange(node);
+    }
+
+    EdgeWeight GetNodeWeight(const NodeID node) const override final
+    {
+        return query_graph.GetNodeWeight(node);
+    }
+
+    EdgeDuration GetNodeDuration(const NodeID node) const override final
+    {
+        return query_graph.GetNodeDuration(node);
+    }
+
+    bool IsForwardEdge(const NodeID node) const override final
+    {
+        return query_graph.IsForwardEdge(node);
+    }
+
+    bool IsBackwardEdge(const NodeID node) const override final
+    {
+        return query_graph.IsBackwardEdge(node);
+    }
+
     NodeID GetTarget(const EdgeID e) const override final { return query_graph.GetTarget(e); }
 
     const EdgeData &GetEdgeData(const EdgeID e) const override final
     {
         return query_graph.GetEdgeData(e);
-    }
-
-    EdgeRange GetAdjacentEdgeRange(const NodeID node) const override final
-    {
-        return query_graph.GetAdjacentEdgeRange(node);
     }
 
     EdgeRange GetBorderEdgeRange(const LevelID level, const NodeID node) const override final
@@ -720,7 +738,6 @@ class ContiguousInternalMemoryDataFacade<MLD> final
                                        const std::size_t exclude_index)
         : ContiguousInternalMemoryDataFacadeBase(allocator, metric_name, exclude_index),
           ContiguousInternalMemoryAlgorithmDataFacade<MLD>(allocator, metric_name, exclude_index)
-
     {
     }
 };

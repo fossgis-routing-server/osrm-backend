@@ -1,9 +1,16 @@
-# 5.17.3
-  - Changes from 5.17.2:
-    - Bugfixes:
-      - FIXED: Increased probability of returning alternatives and quality of the ones returned for MLD. [#5048](https://github.com/Project-OSRM/osrm-backend/issues/5048)
+# 5.18.0
+  - Changes from 5.17.0:
+    - Features:
+      - ADDED: `table` plugin now optionally returns `distance` matrix as part of response [#4990](https://github.com/Project-OSRM/osrm-backend/pull/4990)
+      - ADDED: New optional parameter `annotations` for `table` that accepts `distance`, `duration`, or both `distance,duration` as values [#4990](https://github.com/Project-OSRM/osrm-backend/pull/4990)
+    - Infrastructure:
+      - ADDED: Updated libosmium and added protozero and vtzero libraries [#5037](https://github.com/Project-OSRM/osrm-backend/pull/5037)
+      - CHANGED: Use vtzero library in tile plugin [#4686](https://github.com/Project-OSRM/osrm-backend/pull/4686)
+    - Profile:
+      - ADDED: Bicycle profile now returns classes for ferry and tunnel routes. [#5054](https://github.com/Project-OSRM/osrm-backend/pull/5054)
+      - ADDED: Bicycle profile allows to exclude ferry routes (default to not enabled) [#5054](https://github.com/Project-OSRM/osrm-backend/pull/5054)
 
-# 5.17.2
+# 5.17.1
   - Changes from 5.17.0:
     - Bugfixes:
       - FIXED: Do not combine a segregated edge with a roundabout [#5039](https://github.com/Project-OSRM/osrm-backend/issues/5039)

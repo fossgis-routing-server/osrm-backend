@@ -107,6 +107,13 @@ void EdgeBasedGraphFactory::GetEdgeBasedNodeWeights(std::vector<EdgeWeight> &out
     swap(m_edge_based_node_weights, output_node_weights);
 }
 
+void EdgeBasedGraphFactory::GetEdgeBasedNodeDurations(
+    std::vector<EdgeWeight> &output_node_durations)
+{
+    using std::swap; // Koenig swap
+    swap(m_edge_based_node_durations, output_node_durations);
+}
+
 std::uint32_t EdgeBasedGraphFactory::GetConnectivityChecksum() const
 {
     return m_connectivity_checksum;
@@ -138,9 +145,16 @@ NBGToEBG EdgeBasedGraphFactory::InsertEdgeBasedNode(const NodeID node_u, const N
     BOOST_ASSERT(nbe_to_ebn_mapping[edge_id_1] != SPECIAL_NODEID ||
                  nbe_to_ebn_mapping[edge_id_2] != SPECIAL_NODEID);
 
+    // ⚠ Use the sign bit of node weights to distinguish oneway streets:
+    //  * MSB is set - a node corresponds to a one-way street
+    //  * MSB is clear - a node corresponds to a bidirectional street
+    // Before using node weights data values must be adjusted:
+    //  * in contraction if MSB is set the node weight is INVALID_EDGE_WEIGHT.
+    //    This adjustment is needed to enforce loop creation for oneways.
+    //  * in other cases node weights must be masked with 0x7fffffff to clear MSB
     if (nbe_to_ebn_mapping[edge_id_1] != SPECIAL_NODEID &&
         nbe_to_ebn_mapping[edge_id_2] == SPECIAL_NODEID)
-        m_edge_based_node_weights[nbe_to_ebn_mapping[edge_id_1]] = INVALID_EDGE_WEIGHT;
+        m_edge_based_node_weights[nbe_to_ebn_mapping[edge_id_1]] |= 0x80000000;
 
     BOOST_ASSERT(m_compressed_edge_container.HasEntryForID(edge_id_1) ==
                  m_compressed_edge_container.HasEntryForID(edge_id_2));
@@ -278,6 +292,7 @@ unsigned EdgeBasedGraphFactory::LabelEdgeBasedNodes()
     // heuristic: node-based graph node is a simple intersection with four edges
     // (edge-based nodes)
     m_edge_based_node_weights.reserve(4 * m_node_based_graph.GetNumberOfNodes());
+    m_edge_based_node_durations.reserve(4 * m_node_based_graph.GetNumberOfNodes());
     nbe_to_ebn_mapping.resize(m_node_based_graph.GetEdgeCapacity(), SPECIAL_NODEID);
 
     // renumber edge based node of outgoing edges
@@ -294,6 +309,7 @@ unsigned EdgeBasedGraphFactory::LabelEdgeBasedNodes()
             }
 
             m_edge_based_node_weights.push_back(edge_data.weight);
+            m_edge_based_node_durations.push_back(edge_data.duration);
 
             BOOST_ASSERT(numbered_edges_count < m_node_based_graph.GetNumberOfEdges());
             nbe_to_ebn_mapping[current_edge] = numbered_edges_count;
@@ -387,8 +403,10 @@ EdgeBasedGraphFactory::GenerateEdgeExpandedNodes(const WayRestrictionMap &way_re
                 segregated_edges.count(eid) > 0;
 
             const auto ebn_weight = m_edge_based_node_weights[nbe_to_ebn_mapping[eid]];
-            BOOST_ASSERT(ebn_weight == INVALID_EDGE_WEIGHT || ebn_weight == edge_data.weight);
+            BOOST_ASSERT((ebn_weight & 0x7fffffff) == edge_data.weight);
             m_edge_based_node_weights.push_back(ebn_weight);
+            m_edge_based_node_durations.push_back(
+                m_edge_based_node_durations[nbe_to_ebn_mapping[eid]]);
 
             edge_based_node_id++;
             progress.PrintStatus(progress_counter++);
@@ -397,6 +415,7 @@ EdgeBasedGraphFactory::GenerateEdgeExpandedNodes(const WayRestrictionMap &way_re
 
     BOOST_ASSERT(m_edge_based_node_segments.size() == m_edge_based_node_is_startpoint.size());
     BOOST_ASSERT(m_number_of_edge_based_nodes == m_edge_based_node_weights.size());
+    BOOST_ASSERT(m_number_of_edge_based_nodes == m_edge_based_node_durations.size());
 
     util::Log() << "Generated " << m_number_of_edge_based_nodes << " nodes ("
                 << way_restriction_map.NumberOfDuplicatedNodes()

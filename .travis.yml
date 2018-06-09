@@ -13,10 +13,9 @@ notifications:
 branches:
   only:
     - master
-    - "5.16"
+    - "5.18"
     # enable building tags
     - /^v\d+\.\d+(\.\d+)?(-\S*)?$/
-    - "5.17"
 
 cache:
   yarn: true

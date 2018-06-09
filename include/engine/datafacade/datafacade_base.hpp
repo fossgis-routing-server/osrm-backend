@@ -33,7 +33,6 @@
 
 #include <boost/range/adaptor/reversed.hpp>
 #include <boost/range/any_range.hpp>
-
 #include <cstddef>
 
 #include <string>
@@ -87,9 +86,9 @@ class BaseDataFacade
     virtual NodeForwardRange GetUncompressedForwardGeometry(const EdgeID id) const = 0;
     virtual NodeReverseRange GetUncompressedReverseGeometry(const EdgeID id) const = 0;
 
-    virtual TurnPenalty GetWeightPenaltyForEdgeID(const unsigned id) const = 0;
+    virtual TurnPenalty GetWeightPenaltyForEdgeID(const EdgeID id) const = 0;
 
-    virtual TurnPenalty GetDurationPenaltyForEdgeID(const unsigned id) const = 0;
+    virtual TurnPenalty GetDurationPenaltyForEdgeID(const EdgeID id) const = 0;
 
     // Gets the weight values for each segment in an uncompressed geometry.
     // Should always be 1 shorter than GetUncompressedGeometry

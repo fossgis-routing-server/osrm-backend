@@ -68,7 +68,7 @@ If you want to prioritize certain streets, increase the rate on these.
 
 ## Elements
 ### api_version
-A profile should set `api_version` at the top of your profile. This is done to ensure that older profiles are still supported when the api changes. If `api_version` is not defined, 0 will be assumed. The current api version is 2.
+A profile should set `api_version` at the top of your profile. This is done to ensure that older profiles are still supported when the api changes. If `api_version` is not defined, 0 will be assumed. The current api version is 4.
 
 ### Library files
 The folder [profiles/lib/](../profiles/lib/) contains LUA library files for handling many common processing tasks.
@@ -224,8 +224,8 @@ source_highway_turn_classification | Read          | Integer                   |
 source_access_turn_classification  | Read          | Integer                   | Classification based on access tag defined by user during setup. (default when not set: 0, allowed classification values are: 0-15))
 source_speed                       | Read          | Integer                   | Speed on this source road in km/h
 source_priority_class              | Read          | Enum                      | The type of road priority class of the source. Defined in `include/extractor/guidance/road_classification.hpp`
-target_restricted                  | Read          | Boolean                   | Is it from a restricted access road? (See definition in `process_way`)
-target_mode                        | Read          | Enum                      | Travel mode before the turn. Defined in `include/extractor/travel_mode.hpp`
+target_restricted                  | Read          | Boolean                   | Is the target a restricted access road? (See definition in `process_way`)
+target_mode                        | Read          | Enum                      | Travel mode after the turn. Defined in `include/extractor/travel_mode.hpp`
 target_is_motorway                 | Read          | Boolean                   | Is the target road a motorway?
 target_is_link                     | Read          | Boolean                   | Is the target road a link?
 target_number_of_lanes             | Read          | Integer                   | How many lanes does the target road have? (default when not tagged: 0)

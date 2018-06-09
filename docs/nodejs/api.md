@@ -110,8 +110,8 @@ Returns **[Object](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Refer
 
 ### table
 
-Computes duration tables for the given locations. Allows for both symmetric and asymmetric
-tables.
+Computes duration table for the given locations. Allows for both symmetric and asymmetric
+tables. Optionally returns distance table.
 
 **Parameters**
 

@@ -462,14 +462,28 @@ void readEdgeBasedNodeWeights(const boost::filesystem::path &path, NodeWeigtsVec
     storage::serialization::read(reader, "/extractor/edge_based_node_weights", weights);
 }
 
-template <typename NodeWeigtsVectorT>
-void writeEdgeBasedNodeWeights(const boost::filesystem::path &path,
-                               const NodeWeigtsVectorT &weights)
+template <typename NodeWeigtsVectorT, typename NodeDurationsVectorT>
+void readEdgeBasedNodeWeightsDurations(const boost::filesystem::path &path,
+                                       NodeWeigtsVectorT &weights,
+                                       NodeDurationsVectorT &durations)
+{
+    const auto fingerprint = storage::tar::FileReader::VerifyFingerprint;
+    storage::tar::FileReader reader{path, fingerprint};
+
+    storage::serialization::read(reader, "/extractor/edge_based_node_weights", weights);
+    storage::serialization::read(reader, "/extractor/edge_based_node_durations", durations);
+}
+
+template <typename NodeWeigtsVectorT, typename NodeDurationsVectorT>
+void writeEdgeBasedNodeWeightsDurations(const boost::filesystem::path &path,
+                                        const NodeWeigtsVectorT &weights,
+                                        const NodeDurationsVectorT &durations)
 {
     const auto fingerprint = storage::tar::FileWriter::GenerateFingerprint;
     storage::tar::FileWriter writer{path, fingerprint};
 
     storage::serialization::write(writer, "/extractor/edge_based_node_weights", weights);
+    storage::serialization::write(writer, "/extractor/edge_based_node_durations", durations);
 }
 
 template <typename RTreeT>
@@ -505,29 +519,6 @@ void readCompressedNodeBasedGraph(const boost::filesystem::path &path, EdgeListT
     storage::tar::FileReader reader{path, fingerprint};
 
     storage::serialization::read(reader, "/extractor/cnbg", edge_list);
-}
-
-// reads .osrm.maneuver_overrides
-template <typename StorageManeuverOverrideT, typename NodeSequencesT>
-inline void readManeuverOverrides(const boost::filesystem::path &path,
-                                  StorageManeuverOverrideT &maneuver_overrides,
-                                  NodeSequencesT &node_sequences)
-{
-    const auto fingerprint = storage::io::FileReader::VerifyFingerprint;
-    storage::io::FileReader reader{path, fingerprint};
-
-    serialization::read(reader, maneuver_overrides, node_sequences);
-}
-
-// writes .osrm.maneuver_overrides
-inline void writeManeuverOverrides(const boost::filesystem::path &path,
-                                   const std::vector<StorageManeuverOverride> &maneuver_overrides,
-                                   const std::vector<NodeID> &node_sequences)
-{
-    const auto fingerprint = storage::io::FileWriter::GenerateFingerprint;
-    storage::io::FileWriter writer{path, fingerprint};
-
-    serialization::write(writer, maneuver_overrides, node_sequences);
 }
 }
 }

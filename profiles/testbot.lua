@@ -5,7 +5,7 @@
 -- Secondary road:  18km/h = 18000m/3600s = 100m/20s
 -- Tertiary road:  12km/h = 12000m/3600s = 100m/30s
 
-api_version = 3
+api_version = 4
 
 function setup()
   return {
@@ -14,7 +14,7 @@ function setup()
       max_speed_for_map_matching    = 30/3.6, --km -> m/s
       weight_name                   = 'duration',
       process_call_tagless_node     = false,
-      uturn_penalty                 = 20,
+      u_turn_penalty                 = 20,
       traffic_light_penalty         = 7,     -- seconds
       use_turn_restrictions         = true
     },
@@ -32,7 +32,7 @@ function setup()
       primary = 36,
       secondary = 18,
       tertiary = 12,
-      steps = 6,
+      steps = 6
     }
   }
 end
@@ -128,9 +128,9 @@ function process_way (profile, way, result)
 end
 
 function process_turn (profile, turn)
-  if turn.direction_modifier == direction_modifier.uturn then
-    turn.duration = profile.properties.uturn_penalty
-    turn.weight = profile.properties.uturn_penalty
+  if turn.is_u_turn then
+    turn.duration = turn.duration + profile.properties.u_turn_penalty
+    turn.weight = turn.weight + profile.properties.u_turn_penalty
   end
   if turn.has_traffic_light then
      turn.duration = turn.duration + profile.properties.traffic_light_penalty
