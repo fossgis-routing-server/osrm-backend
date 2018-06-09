@@ -9,6 +9,8 @@
 #include "extractor/restriction.hpp"
 #include "extractor/serialization.hpp"
 
+#include "guidance/files.hpp"
+
 #include "storage/io.hpp"
 
 #include "util/exception.hpp"
@@ -33,10 +35,11 @@
 #include <boost/interprocess/mapped_region.hpp>
 
 #include <tbb/blocked_range.h>
-#include <tbb/concurrent_unordered_map.h>
+#include <tbb/concurrent_vector.h>
 #include <tbb/enumerable_thread_specific.h>
-#include <tbb/parallel_for_each.h>
+#include <tbb/parallel_for.h>
 #include <tbb/parallel_invoke.h>
+#include <tbb/parallel_sort.h>
 
 #include <algorithm>
 #include <atomic>
@@ -111,9 +114,6 @@ void checkWeightsConsistency(
     extractor::EdgeBasedNodeDataContainer node_data;
     extractor::files::readNodeData(config.GetPath(".osrm.ebg_nodes"), node_data);
 
-    extractor::TurnDataContainer turn_data;
-    extractor::files::readTurnData(config.GetPath(".osrm.edges"), turn_data);
-
     for (auto &edge : edge_based_edge_list)
     {
         const auto node_id = edge.source;
@@ -143,6 +143,8 @@ void checkWeightsConsistency(
 }
 #endif
 
+static const constexpr std::size_t LUA_SOURCE = 0;
+
 tbb::concurrent_vector<GeometryID>
 updateSegmentData(const UpdaterConfig &config,
                   const extractor::ProfileProperties &profile_properties,
@@ -157,7 +159,6 @@ updateSegmentData(const UpdaterConfig &config,
     std::size_t num_counters = config.segment_speed_lookup_paths.size() + 1;
     tbb::enumerable_thread_specific<counters_type> segment_speeds_counters(
         counters_type(num_counters, 0));
-    const constexpr auto LUA_SOURCE = 0;
 
     // closure to convert SpeedSource value to weight and count fallbacks to durations
     std::atomic<std::uint32_t> fallbacks_to_duration{0};
@@ -214,7 +215,7 @@ updateSegmentData(const UpdaterConfig &config,
 
     using DirectionalGeometryID = extractor::SegmentDataContainer::DirectionalGeometryID;
     auto range = tbb::blocked_range<DirectionalGeometryID>(0, segment_data.GetNumberOfGeometries());
-    tbb::parallel_for(range, [&, LUA_SOURCE](const auto &range) {
+    tbb::parallel_for(range, [&](const auto &range) {
         auto &counters = segment_speeds_counters.local();
         std::vector<double> segment_lengths;
         for (auto geometry_id = range.begin(); geometry_id < range.end(); geometry_id++)
@@ -524,14 +525,17 @@ Updater::NumNodesAndEdges Updater::LoadAndUpdateEdgeExpandedGraph() const
 {
     std::vector<EdgeWeight> node_weights;
     std::vector<extractor::EdgeBasedEdge> edge_based_edge_list;
-    auto number_of_edge_based_nodes =
-        Updater::LoadAndUpdateEdgeExpandedGraph(edge_based_edge_list, node_weights);
-    return std::make_tuple(number_of_edge_based_nodes, std::move(edge_based_edge_list));
+    std::uint32_t connectivity_checksum;
+    auto number_of_edge_based_nodes = Updater::LoadAndUpdateEdgeExpandedGraph(
+        edge_based_edge_list, node_weights, connectivity_checksum);
+    return std::make_tuple(
+        number_of_edge_based_nodes, std::move(edge_based_edge_list), connectivity_checksum);
 }
 
 EdgeID
 Updater::LoadAndUpdateEdgeExpandedGraph(std::vector<extractor::EdgeBasedEdge> &edge_based_edge_list,
-                                        std::vector<EdgeWeight> &node_weights) const
+                                        std::vector<EdgeWeight> &node_weights,
+                                        std::uint32_t &connectivity_checksum) const
 {
     TIMER_START(load_edges);
 
@@ -539,8 +543,10 @@ Updater::LoadAndUpdateEdgeExpandedGraph(std::vector<extractor::EdgeBasedEdge> &e
     std::vector<util::Coordinate> coordinates;
     extractor::PackedOSMIDs osm_node_ids;
 
-    extractor::files::readEdgeBasedGraph(
-        config.GetPath(".osrm.ebg"), number_of_edge_based_nodes, edge_based_edge_list);
+    extractor::files::readEdgeBasedGraph(config.GetPath(".osrm.ebg"),
+                                         number_of_edge_based_nodes,
+                                         edge_based_edge_list,
+                                         connectivity_checksum);
     extractor::files::readNodes(config.GetPath(".osrm.nbg_nodes"), coordinates, osm_node_ids);
 
     const bool update_conditional_turns =
@@ -559,7 +565,6 @@ Updater::LoadAndUpdateEdgeExpandedGraph(std::vector<extractor::EdgeBasedEdge> &e
                               SOURCE_REF);
 
     extractor::EdgeBasedNodeDataContainer node_data;
-    extractor::TurnDataContainer turn_data;
     extractor::SegmentDataContainer segment_data;
     extractor::ProfileProperties profile_properties;
     std::vector<TurnPenalty> turn_weight_penalties;
@@ -572,10 +577,6 @@ Updater::LoadAndUpdateEdgeExpandedGraph(std::vector<extractor::EdgeBasedEdge> &e
 
         const auto load_node_data = [&] {
             extractor::files::readNodeData(config.GetPath(".osrm.ebg_nodes"), node_data);
-        };
-
-        const auto load_edge_data = [&] {
-            extractor::files::readTurnData(config.GetPath(".osrm.edges"), turn_data);
         };
 
         const auto load_turn_weight_penalties = [&] {
@@ -600,7 +601,6 @@ Updater::LoadAndUpdateEdgeExpandedGraph(std::vector<extractor::EdgeBasedEdge> &e
         };
 
         tbb::parallel_invoke(load_node_data,
-                             load_edge_data,
                              load_segment_data,
                              load_turn_weight_penalties,
                              load_turn_duration_penalties,

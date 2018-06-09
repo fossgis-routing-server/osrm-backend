@@ -1,7 +1,7 @@
 #ifndef EXTRACTION_WAY_HPP
 #define EXTRACTION_WAY_HPP
 
-#include "extractor/guidance/road_classification.hpp"
+#include "extractor/road_classification.hpp"
 #include "extractor/travel_mode.hpp"
 #include "util/guidance/turn_lanes.hpp"
 #include "util/typedefs.hpp"
@@ -54,15 +54,17 @@ struct ExtractionWay
         exits.clear();
         turn_lanes_forward.clear();
         turn_lanes_backward.clear();
-        road_classification = guidance::RoadClassification();
-        forward_travel_mode = extractor::TRAVEL_MODE_INACCESSIBLE;
-        backward_travel_mode = extractor::TRAVEL_MODE_INACCESSIBLE;
+        road_classification = RoadClassification();
+        forward_travel_mode = TRAVEL_MODE_INACCESSIBLE;
+        backward_travel_mode = TRAVEL_MODE_INACCESSIBLE;
         roundabout = false;
         circular = false;
         is_startpoint = true;
         forward_restricted = false;
         backward_restricted = false;
         is_left_hand_driving = false;
+        highway_turn_classification = 0;
+        access_turn_classification = 0;
     }
 
     // wrappers to allow assigning nil (nullptr) to string values
@@ -111,9 +113,9 @@ struct ExtractionWay
     std::string exits;
     std::string turn_lanes_forward;
     std::string turn_lanes_backward;
-    guidance::RoadClassification road_classification;
-    extractor::TravelMode forward_travel_mode : 4;
-    extractor::TravelMode backward_travel_mode : 4;
+    RoadClassification road_classification;
+    TravelMode forward_travel_mode : 4;
+    TravelMode backward_travel_mode : 4;
 
     // Boolean flags
     bool roundabout : 1;
@@ -123,6 +125,10 @@ struct ExtractionWay
     bool backward_restricted : 1;
     bool is_left_hand_driving : 1;
     bool : 2;
+
+    // user classifications for turn penalties
+    std::uint8_t highway_turn_classification : 4;
+    std::uint8_t access_turn_classification : 4;
 };
 }
 }

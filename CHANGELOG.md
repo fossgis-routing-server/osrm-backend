@@ -1,6 +1,53 @@
+
+# 5.16.0
+  - Changes from 5.15.2:
+    - Guidance
+      - ADDED #4676: Support for maneuver override relation, allowing data-driven overrides for turn-by-turn instructions [#4676](https://github.com/Project-OSRM/osrm-backend/pull/4676)
+      - CHANGED #4830: Announce reference change if names are empty
+      - CHANGED #4835: MAXIMAL_ALLOWED_SEPARATION_WIDTH increased to 12 meters
+      - CHANGED #4842: Lower priority links from a motorway now are used as motorway links [#4842](https://github.com/Project-OSRM/osrm-backend/pull/4842)
+      - CHANGED #4895: Use ramp bifurcations as fork intersections [#4895](https://github.com/Project-OSRM/osrm-backend/issues/4895)
+      - CHANGED #4893: Handle motorway forks with links as normal motorway intersections[#4893](https://github.com/Project-OSRM/osrm-backend/issues/4893)
+      - FIXED #4905: Check required tags of `maneuver` relations [#4905](https://github.com/Project-OSRM/osrm-backend/pull/4905)
+    - Profile:
+      - FIXED: `highway=service` will now be used for restricted access, `access=private` is still disabled for snapping.
+      - ADDED #4775: Exposes more information to the turn function, now being able to set turn weights with highway and access information of the turn as well as other roads at the intersection [#4775](https://github.com/Project-OSRM/osrm-backend/issues/4775)
+      - FIXED #4763: Add support for non-numerical units in car profile for maxheight [#4763](https://github.com/Project-OSRM/osrm-backend/issues/4763)
+      - ADDED #4872: Handling of `barrier=height_restrictor` nodes [#4872](https://github.com/Project-OSRM/osrm-backend/pull/4872)
+
+# 5.15.2
+  - Changes from 5.15.1:
+    - Features:
+        - ADDED: Exposed the waypoints parameter in the node bindings interface
+    - Bugfixes:
+        - FIXED: Segfault causing bug in leg collapsing map matching when traversing edges in reverse
+
+# 5.15.1
+  - Changes from 5.15.0:
+    - Bugfixes:
+      - FIXED: Segfault in map matching when RouteLeg collapsing code is run on a match with multiple submatches
+    - Guidance:
+      - Set type of trivial intersections where classes change to Suppressed instead of NoTurn
+
+# 5.15.0
+  - Changes from 5.14.3:
+    - Bugfixes:
+      - FIXED #4704: Fixed regression in bearings reordering introduced in 5.13 [#4704](https://github.com/Project-OSRM/osrm-backend/issues/4704)
+      - FIXED #4781: Fixed overflow exceptions in percent-encoding parsing
+      - FIXED #4770: Fixed exclude flags for single toll road scenario
+      - FIXED #4283: Fix overflow on zero duration segments
+      - FIXED #4804: Ignore no_*_on_red turn restrictions
+    - Guidance:
+      - CHANGED #4706: Guidance refactoring step to decouple intersection connectivity analysis and turn instructions generation [#4706](https://github.com/Project-OSRM/osrm-backend/pull/4706)
+      - CHANGED #3491: Refactor `isThroughStreet`/Intersection options
+    - Profile:
+      - ADDED: `tunnel` as a new class in car profile so that sections of the route with tunnel tags will be marked as such
+
 # 5.14.3
- - Changes from 5.14.2:
-   - Bugfixes:
+  - Changes from 5.14.2:
+    - Features:
+      - Added a `waypoints` parameter to the match service plugin that accepts indices to input coordinates and treats only those points as waypoints in the response format.
+    - Bugfixes:
       - FIXED #4754: U-Turn penalties are applied to straight turns.
       - FIXED #4756: Removed too restrictive road name check in the sliproad handler
       - FIXED #4731: Use correct weights for edge-based graph duplicated via nodes.
@@ -9,8 +56,8 @@
       - CHANGED: set default urban speed in Ukraine to 50kmh
 
 # 5.14.2
- - Changes from 5.14.1:
-   - Bugfixes:
+  - Changes from 5.14.1:
+    - Bugfixes:
       - FIXED #4727: Erroring when a old .core file is present.
       - FIXED #4642: Update checks for EMPTY_NAMEID to check for empty name strings
       - FIXED #4738: Fix potential segmentation fault

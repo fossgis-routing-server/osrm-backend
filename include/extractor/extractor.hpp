@@ -32,7 +32,11 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "extractor/edge_based_graph_factory.hpp"
 #include "extractor/extractor_config.hpp"
 #include "extractor/graph_compressor.hpp"
+#include "extractor/maneuver_override.hpp"
 #include "extractor/packed_osm_ids.hpp"
+
+#include "guidance/guidance_processing.hpp"
+#include "guidance/turn_data_container.hpp"
 
 #include "util/guidance/bearing_class.hpp"
 #include "util/guidance/entry_class.hpp"
@@ -47,7 +51,6 @@ namespace extractor
 
 class ScriptingEnvironment;
 struct ProfileProperties;
-class NodeBasedGraphFactory;
 
 class Extractor
 {
@@ -58,9 +61,10 @@ class Extractor
   private:
     ExtractorConfig config;
 
-    std::tuple<guidance::LaneDescriptionMap,
+    std::tuple<LaneDescriptionMap,
                std::vector<TurnRestriction>,
-               std::vector<ConditionalTurnRestriction>>
+               std::vector<ConditionalTurnRestriction>,
+               std::vector<UnresolvedManeuverOverride>>
     ParseOSMData(ScriptingEnvironment &scripting_environment, const unsigned number_of_threads);
 
     EdgeID BuildEdgeExpandedGraph(
@@ -73,8 +77,9 @@ class Extractor
         const std::vector<TurnRestriction> &turn_restrictions,
         const std::vector<ConditionalTurnRestriction> &conditional_turn_restrictions,
         const std::unordered_set<EdgeID> &segregated_edges,
-        // might have to be updated to add new lane combinations
-        guidance::LaneDescriptionMap &turn_lane_map,
+        const util::NameTable &name_table,
+        const std::vector<UnresolvedManeuverOverride> &maneuver_overrides,
+        const LaneDescriptionMap &turn_lane_map,
         // for calculating turn penalties
         ScriptingEnvironment &scripting_environment,
         // output data
@@ -83,7 +88,7 @@ class Extractor
         std::vector<bool> &node_is_startpoint,
         std::vector<EdgeWeight> &edge_based_node_weights,
         util::DeallocatingVector<EdgeBasedEdge> &edge_based_edge_list,
-        const std::string &intersection_class_output_file);
+        std::uint32_t &connectivity_checksum);
 
     void FindComponents(unsigned max_edge_id,
                         const util::DeallocatingVector<EdgeBasedEdge> &input_edge_list,
@@ -103,12 +108,17 @@ class Extractor
         const std::string &path,
         std::vector<ConditionalTurnRestriction> &conditional_turn_restrictions);
 
-    // Find all "segregated" edges, e.g. edges that can be skipped in turn instructions.
-    // The main cases are:
-    // - middle edges between two osm ways in one logic road (U-turn)
-    // - staggered intersections (X-cross)
-    // - square/circle intersections
-    std::unordered_set<EdgeID> FindSegregatedNodes(NodeBasedGraphFactory &factory);
+    void ProcessGuidanceTurns(
+        const util::NodeBasedDynamicGraph &node_based_graph,
+        const EdgeBasedNodeDataContainer &edge_based_node_container,
+        const std::vector<util::Coordinate> &node_coordinates,
+        const CompressedEdgeContainer &compressed_edge_container,
+        const std::unordered_set<NodeID> &barrier_nodes,
+        const std::vector<TurnRestriction> &turn_restrictions,
+        const std::vector<ConditionalTurnRestriction> &conditional_turn_restrictions,
+        const util::NameTable &name_table,
+        LaneDescriptionMap lane_description_map,
+        ScriptingEnvironment &scripting_environment);
 };
 }
 }

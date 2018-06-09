@@ -1,6 +1,6 @@
 #include "engine/guidance/collapse_turns.hpp"
-#include "extractor/guidance/constants.hpp"
-#include "extractor/guidance/turn_instruction.hpp"
+#include "guidance/constants.hpp"
+#include "guidance/turn_instruction.hpp"
 #include "engine/guidance/collapse_scenario_detection.hpp"
 #include "engine/guidance/collapsing_utility.hpp"
 #include "util/bearing.hpp"
@@ -10,16 +10,14 @@
 
 #include <boost/assert.hpp>
 
-using osrm::extractor::guidance::TurnInstruction;
-using osrm::util::angularDeviation;
-using namespace osrm::extractor::guidance;
-
 namespace osrm
 {
 namespace engine
 {
 namespace guidance
 {
+using osrm::util::angularDeviation;
+using namespace osrm::guidance;
 
 namespace
 {
@@ -53,7 +51,7 @@ double findTotalTurnAngle(const RouteStep &entry_step, const RouteStep &exit_ste
     // both angles are in the same direction, the total turn gets increased
     //
     // a ---- b
-    //           \
+    //           `
     //              c
     //              |
     //              d
@@ -286,8 +284,7 @@ void StaggeredTurnStrategy::operator()(RouteStep &step_at_turn_location,
                                                                      : TurnType::NewName;
 }
 
-SetFixedInstructionStrategy::SetFixedInstructionStrategy(
-    const extractor::guidance::TurnInstruction instruction)
+SetFixedInstructionStrategy::SetFixedInstructionStrategy(const TurnInstruction instruction)
     : instruction(instruction)
 {
 }

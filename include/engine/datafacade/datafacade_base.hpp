@@ -10,16 +10,19 @@
 
 #include "extractor/class_data.hpp"
 #include "extractor/edge_based_node_segment.hpp"
-#include "extractor/guidance/turn_instruction.hpp"
-#include "extractor/guidance/turn_lane_types.hpp"
-#include "extractor/original_edge_data.hpp"
+//#include "extractor/guidance/turn_lane_types.hpp"
+#include "extractor/maneuver_override.hpp"
+//#include "extractor/original_edge_data.hpp"
 #include "extractor/query_node.hpp"
 #include "extractor/travel_mode.hpp"
+#include "extractor/turn_lane_types.hpp"
+
+#include "guidance/turn_bearing.hpp"
+#include "guidance/turn_instruction.hpp"
 
 #include "util/exception.hpp"
 #include "util/guidance/bearing_class.hpp"
 #include "util/guidance/entry_class.hpp"
-#include "util/guidance/turn_bearing.hpp"
 #include "util/guidance/turn_lanes.hpp"
 #include "util/integer_range.hpp"
 #include "util/string_util.hpp"
@@ -87,8 +90,7 @@ class BaseDataFacade
     // Gets the name of a datasource
     virtual StringView GetDatasourceName(const DatasourceID id) const = 0;
 
-    virtual extractor::guidance::TurnInstruction
-    GetTurnInstructionForEdgeID(const EdgeID id) const = 0;
+    virtual osrm::guidance::TurnInstruction GetTurnInstructionForEdgeID(const EdgeID id) const = 0;
 
     virtual extractor::TravelMode GetTravelMode(const NodeID id) const = 0;
 
@@ -156,7 +158,7 @@ class BaseDataFacade
 
     virtual bool HasLaneData(const EdgeID id) const = 0;
     virtual util::guidance::LaneTupleIdPair GetLaneData(const EdgeID id) const = 0;
-    virtual extractor::guidance::TurnLaneDescription
+    virtual extractor::TurnLaneDescription
     GetTurnDescription(const LaneDescriptionID lane_description_id) const = 0;
 
     virtual NameID GetNameIndex(const NodeID id) const = 0;
@@ -183,8 +185,8 @@ class BaseDataFacade
 
     virtual double GetWeightMultiplier() const = 0;
 
-    virtual util::guidance::TurnBearing PreTurnBearing(const EdgeID eid) const = 0;
-    virtual util::guidance::TurnBearing PostTurnBearing(const EdgeID eid) const = 0;
+    virtual osrm::guidance::TurnBearing PreTurnBearing(const EdgeID eid) const = 0;
+    virtual osrm::guidance::TurnBearing PostTurnBearing(const EdgeID eid) const = 0;
 
     virtual util::guidance::BearingClass GetBearingClass(const NodeID node) const = 0;
 
@@ -193,6 +195,9 @@ class BaseDataFacade
     virtual bool IsLeftHandDriving(const NodeID id) const = 0;
 
     virtual bool IsSegregated(const NodeID) const = 0;
+
+    virtual std::vector<extractor::ManeuverOverride>
+    GetOverridesThatStartAt(const NodeID edge_based_node_id) const = 0;
 };
 }
 }

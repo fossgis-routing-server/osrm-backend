@@ -1,7 +1,8 @@
 #ifndef OSRM_ENGINE_ROUTING_BASE_HPP
 #define OSRM_ENGINE_ROUTING_BASE_HPP
 
-#include "extractor/guidance/turn_instruction.hpp"
+#include "guidance/turn_bearing.hpp"
+#include "guidance/turn_instruction.hpp"
 
 #include "engine/algorithm.hpp"
 #include "engine/datafacade.hpp"
@@ -10,7 +11,6 @@
 #include "engine/search_engine_data.hpp"
 
 #include "util/coordinate_calculation.hpp"
-#include "util/guidance/turn_bearing.hpp"
 #include "util/typedefs.hpp"
 
 #include <boost/assert.hpp>
@@ -192,21 +192,22 @@ void annotatePath(const FacadeT &facade,
         BOOST_ASSERT(start_index < end_index);
         for (std::size_t segment_idx = start_index; segment_idx < end_index; ++segment_idx)
         {
-            unpacked_path.push_back(PathData{id_vector[segment_idx + 1],
+            unpacked_path.push_back(PathData{*node_from,
+                                             id_vector[segment_idx + 1],
                                              name_index,
                                              is_segregated,
                                              weight_vector[segment_idx],
                                              0,
                                              duration_vector[segment_idx],
                                              0,
-                                             extractor::guidance::TurnInstruction::NO_TURN(),
+                                             guidance::TurnInstruction::NO_TURN(),
                                              {{0, INVALID_LANEID}, INVALID_LANE_DESCRIPTIONID},
                                              travel_mode,
                                              classes,
                                              EMPTY_ENTRY_CLASS,
                                              datasource_vector[segment_idx],
-                                             util::guidance::TurnBearing(0),
-                                             util::guidance::TurnBearing(0),
+                                             osrm::guidance::TurnBearing(0),
+                                             osrm::guidance::TurnBearing(0),
                                              is_left_hand_driving});
         }
         BOOST_ASSERT(unpacked_path.size() > 0);
@@ -266,21 +267,22 @@ void annotatePath(const FacadeT &facade,
         BOOST_ASSERT(segment_idx < id_vector.size() - 1);
         BOOST_ASSERT(facade.GetTravelMode(target_node_id) > 0);
         unpacked_path.push_back(
-            PathData{id_vector[start_index < end_index ? segment_idx + 1 : segment_idx - 1],
+            PathData{target_node_id,
+                     id_vector[start_index < end_index ? segment_idx + 1 : segment_idx - 1],
                      facade.GetNameIndex(target_node_id),
                      facade.IsSegregated(target_node_id),
                      weight_vector[segment_idx],
                      0,
                      duration_vector[segment_idx],
                      0,
-                     extractor::guidance::TurnInstruction::NO_TURN(),
+                     guidance::TurnInstruction::NO_TURN(),
                      {{0, INVALID_LANEID}, INVALID_LANE_DESCRIPTIONID},
                      facade.GetTravelMode(target_node_id),
                      facade.GetClassData(target_node_id),
                      EMPTY_ENTRY_CLASS,
                      datasource_vector[segment_idx],
-                     util::guidance::TurnBearing(0),
-                     util::guidance::TurnBearing(0),
+                     guidance::TurnBearing(0),
+                     guidance::TurnBearing(0),
                      is_target_left_hand_driving});
     }
 

@@ -83,8 +83,8 @@ inline unsigned generateServerProgramOptions(const int argc,
                                              EngineConfig &config,
                                              int &requested_thread_num)
 {
-    using boost::program_options::value;
     using boost::filesystem::path;
+    using boost::program_options::value;
 
     const auto hardware_threads = std::max<int>(1, std::thread::hardware_concurrency());
 
@@ -133,7 +133,10 @@ inline unsigned generateServerProgramOptions(const int argc,
          "Max. results supported in nearest query") //
         ("max-alternatives",
          value<int>(&config.max_alternatives)->default_value(3),
-         "Max. number of alternatives supported in the MLD route query");
+         "Max. number of alternatives supported in the MLD route query") //
+        ("max-matching-radius",
+         value<double>(&config.max_radius_map_matching)->default_value(-1.0),
+         "Max. radius size supported in map matching query. Default: unlimited.");
 
     // hidden options, will be allowed on command line, but will not be shown to the user
     boost::program_options::options_description hidden_options("Hidden options");

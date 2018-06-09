@@ -1,4 +1,4 @@
-#include "extractor/guidance/turn_instruction.hpp"
+#include "guidance/turn_instruction.hpp"
 
 #include "engine/plugins/plugin_base.hpp"
 #include "engine/plugins/tile.hpp"
@@ -534,7 +534,6 @@ void encodeVectorTile(const DataFacadeBase &facade,
                     line_string_index.add(name);
 
                     const auto encode_tile_line = [&line_layer_writer,
-                                                   &edge,
                                                    &component_id,
                                                    &id,
                                                    &max_datasource_id,
@@ -765,11 +764,10 @@ void encodeVectorTile(const DataFacadeBase &facade,
                     auto weight_idx =
                         point_float_index.add(t.weight / 10.0); // Note conversion to float here
 
-                    auto turntype_idx =
-                        point_string_index.add(extractor::guidance::internalInstructionTypeToString(
-                            t.turn_instruction.type));
+                    auto turntype_idx = point_string_index.add(
+                        osrm::guidance::internalInstructionTypeToString(t.turn_instruction.type));
                     auto turnmodifier_idx =
-                        point_string_index.add(extractor::guidance::instructionModifierToString(
+                        point_string_index.add(osrm::guidance::instructionModifierToString(
                             t.turn_instruction.direction_modifier));
                     return EncodedTurnData{t.coordinate,
                                            angle_idx,

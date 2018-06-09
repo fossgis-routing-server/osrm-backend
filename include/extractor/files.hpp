@@ -2,11 +2,10 @@
 #define OSRM_EXTRACTOR_FILES_HPP
 
 #include "extractor/edge_based_edge.hpp"
-#include "extractor/guidance/turn_lane_types.hpp"
 #include "extractor/node_data_container.hpp"
 #include "extractor/profile_properties.hpp"
 #include "extractor/serialization.hpp"
-#include "extractor/turn_data_container.hpp"
+#include "extractor/turn_lane_types.hpp"
 
 #include "util/coordinate.hpp"
 #include "util/guidance/bearing_class.hpp"
@@ -79,7 +78,8 @@ inline void writeProfileProperties(const boost::filesystem::path &path,
 template <typename EdgeBasedEdgeVector>
 void writeEdgeBasedGraph(const boost::filesystem::path &path,
                          EdgeID const number_of_edge_based_nodes,
-                         const EdgeBasedEdgeVector &edge_based_edge_list)
+                         const EdgeBasedEdgeVector &edge_based_edge_list,
+                         const std::uint32_t connectivity_checksum)
 {
     static_assert(std::is_same<typename EdgeBasedEdgeVector::value_type, EdgeBasedEdge>::value, "");
 
@@ -87,12 +87,14 @@ void writeEdgeBasedGraph(const boost::filesystem::path &path,
 
     writer.WriteElementCount64(number_of_edge_based_nodes);
     storage::serialization::write(writer, edge_based_edge_list);
+    writer.WriteOne(connectivity_checksum);
 }
 
 template <typename EdgeBasedEdgeVector>
 void readEdgeBasedGraph(const boost::filesystem::path &path,
                         EdgeID &number_of_edge_based_nodes,
-                        EdgeBasedEdgeVector &edge_based_edge_list)
+                        EdgeBasedEdgeVector &edge_based_edge_list,
+                        std::uint32_t &connectivity_checksum)
 {
     static_assert(std::is_same<typename EdgeBasedEdgeVector::value_type, EdgeBasedEdge>::value, "");
 
@@ -100,6 +102,7 @@ void readEdgeBasedGraph(const boost::filesystem::path &path,
 
     number_of_edge_based_nodes = reader.ReadElementCount64();
     storage::serialization::read(reader, edge_based_edge_list);
+    reader.ReadInto(connectivity_checksum);
 }
 
 // reads .osrm.nodes
@@ -197,34 +200,6 @@ inline void writeSegmentData(const boost::filesystem::path &path, const SegmentD
     serialization::write(writer, segment_data);
 }
 
-// reads .osrm.edges
-template <typename TurnDataT>
-inline void readTurnData(const boost::filesystem::path &path, TurnDataT &turn_data)
-{
-    static_assert(std::is_same<TurnDataContainer, TurnDataT>::value ||
-                      std::is_same<TurnDataView, TurnDataT>::value ||
-                      std::is_same<TurnDataExternalContainer, TurnDataT>::value,
-                  "");
-    const auto fingerprint = storage::io::FileReader::VerifyFingerprint;
-    storage::io::FileReader reader{path, fingerprint};
-
-    serialization::read(reader, turn_data);
-}
-
-// writes .osrm.edges
-template <typename TurnDataT>
-inline void writeTurnData(const boost::filesystem::path &path, const TurnDataT &turn_data)
-{
-    static_assert(std::is_same<TurnDataContainer, TurnDataT>::value ||
-                      std::is_same<TurnDataView, TurnDataT>::value ||
-                      std::is_same<TurnDataExternalContainer, TurnDataT>::value,
-                  "");
-    const auto fingerprint = storage::io::FileWriter::GenerateFingerprint;
-    storage::io::FileWriter writer{path, fingerprint};
-
-    serialization::write(writer, turn_data);
-}
-
 // reads .osrm.ebg_nodes
 template <typename NodeDataT>
 inline void readNodeData(const boost::filesystem::path &path, NodeDataT &node_data)
@@ -259,9 +234,8 @@ inline void readTurnLaneDescriptions(const boost::filesystem::path &path,
                                      OffsetsT &turn_offsets,
                                      MaskT &turn_masks)
 {
-    static_assert(
-        std::is_same<typename MaskT::value_type, extractor::guidance::TurnLaneType::Mask>::value,
-        "");
+    static_assert(std::is_same<typename MaskT::value_type, extractor::TurnLaneType::Mask>::value,
+                  "");
     static_assert(std::is_same<typename OffsetsT::value_type, std::uint32_t>::value, "");
 
     const auto fingerprint = storage::io::FileReader::VerifyFingerprint;
@@ -277,9 +251,8 @@ inline void writeTurnLaneDescriptions(const boost::filesystem::path &path,
                                       const OffsetsT &turn_offsets,
                                       const MaskT &turn_masks)
 {
-    static_assert(
-        std::is_same<typename MaskT::value_type, extractor::guidance::TurnLaneType::Mask>::value,
-        "");
+    static_assert(std::is_same<typename MaskT::value_type, extractor::TurnLaneType::Mask>::value,
+                  "");
     static_assert(std::is_same<typename OffsetsT::value_type, std::uint32_t>::value, "");
 
     const auto fingerprint = storage::io::FileWriter::GenerateFingerprint;
@@ -287,6 +260,29 @@ inline void writeTurnLaneDescriptions(const boost::filesystem::path &path,
 
     storage::serialization::write(writer, turn_offsets);
     storage::serialization::write(writer, turn_masks);
+}
+
+// reads .osrm.maneuver_overrides
+template <typename StorageManeuverOverrideT, typename NodeSequencesT>
+inline void readManeuverOverrides(const boost::filesystem::path &path,
+                                  StorageManeuverOverrideT &maneuver_overrides,
+                                  NodeSequencesT &node_sequences)
+{
+    const auto fingerprint = storage::io::FileReader::VerifyFingerprint;
+    storage::io::FileReader reader{path, fingerprint};
+
+    serialization::read(reader, maneuver_overrides, node_sequences);
+}
+
+// writes .osrm.maneuver_overrides
+inline void writeManeuverOverrides(const boost::filesystem::path &path,
+                                   const std::vector<StorageManeuverOverride> &maneuver_overrides,
+                                   const std::vector<NodeID> &node_sequences)
+{
+    const auto fingerprint = storage::io::FileWriter::GenerateFingerprint;
+    storage::io::FileWriter writer{path, fingerprint};
+
+    serialization::write(writer, maneuver_overrides, node_sequences);
 }
 }
 }

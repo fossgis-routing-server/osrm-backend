@@ -8,15 +8,15 @@
 #include "extractor/edge_based_edge.hpp"
 #include "extractor/edge_based_node_segment.hpp"
 #include "extractor/extraction_turn.hpp"
-#include "extractor/guidance/turn_analysis.hpp"
-#include "extractor/guidance/turn_instruction.hpp"
-#include "extractor/guidance/turn_lane_types.hpp"
+#include "extractor/maneuver_override.hpp"
 #include "extractor/nbg_to_ebg.hpp"
 #include "extractor/node_data_container.hpp"
-#include "extractor/original_edge_data.hpp"
 #include "extractor/query_node.hpp"
 #include "extractor/restriction_index.hpp"
+#include "extractor/turn_lane_types.hpp"
 #include "extractor/way_restriction_map.hpp"
+#include "guidance/turn_analysis.hpp"
+#include "guidance/turn_instruction.hpp"
 
 #include "util/concurrent_id_map.hpp"
 #include "util/deallocating_vector.hpp"
@@ -76,31 +76,26 @@ class EdgeBasedGraphFactory
                                    const std::vector<util::Coordinate> &coordinates,
                                    const util::NameTable &name_table,
                                    const std::unordered_set<EdgeID> &segregated_edges,
-                                   guidance::LaneDescriptionMap &lane_description_map);
+                                   const LaneDescriptionMap &lane_description_map);
 
     void Run(ScriptingEnvironment &scripting_environment,
-             const std::string &turn_data_filename,
-             const std::string &turn_lane_data_filename,
              const std::string &turn_weight_penalties_filename,
              const std::string &turn_duration_penalties_filename,
              const std::string &turn_penalties_index_filename,
              const std::string &cnbg_ebg_mapping_path,
              const std::string &conditional_penalties_filename,
+             const std::string &maneuver_overrides_filename,
              const RestrictionMap &node_restriction_map,
              const ConditionalRestrictionMap &conditional_restriction_map,
-             const WayRestrictionMap &way_restriction_map);
+             const WayRestrictionMap &way_restriction_map,
+             const std::vector<UnresolvedManeuverOverride> &maneuver_overrides);
 
     // The following get access functions destroy the content in the factory
     void GetEdgeBasedEdges(util::DeallocatingVector<EdgeBasedEdge> &edges);
     void GetEdgeBasedNodeSegments(std::vector<EdgeBasedNodeSegment> &nodes);
     void GetStartPointMarkers(std::vector<bool> &node_is_startpoint);
     void GetEdgeBasedNodeWeights(std::vector<EdgeWeight> &output_node_weights);
-
-    // These access functions don't destroy the content
-    const std::vector<BearingClassID> &GetBearingClassIds() const;
-    std::vector<BearingClassID> &GetBearingClassIds();
-    std::vector<util::guidance::BearingClass> GetBearingClasses() const;
-    std::vector<util::guidance::EntryClass> GetEntryClasses() const;
+    std::uint32_t GetConnectivityChecksum() const;
 
     std::uint64_t GetNumberOfEdgeBasedNodes() const;
 
@@ -142,6 +137,7 @@ class EdgeBasedGraphFactory
     std::vector<EdgeBasedNodeSegment> m_edge_based_node_segments;
     EdgeBasedNodeDataContainer &m_edge_based_node_container;
     util::DeallocatingVector<EdgeBasedEdge> m_edge_based_edge_list;
+    std::uint32_t m_connectivity_checksum;
 
     // The number of edge-based nodes is mostly made up out of the edges in the node-based graph.
     // Any edge in the node-based graph represents a node in the edge-based graph. In addition, we
@@ -159,7 +155,7 @@ class EdgeBasedGraphFactory
 
     const util::NameTable &name_table;
     const std::unordered_set<EdgeID> &segregated_edges;
-    guidance::LaneDescriptionMap &lane_description_map;
+    const LaneDescriptionMap &lane_description_map;
 
     // In the edge based graph, any traversable (non reversed) edge of the node-based graph forms a
     // node of the edge-based graph. To be able to name these nodes, we loop over the node-based
@@ -175,28 +171,22 @@ class EdgeBasedGraphFactory
 
     // Edge-expanded edges are generate for all valid turns. The validity can be checked via the
     // restriction maps
-    void GenerateEdgeExpandedEdges(ScriptingEnvironment &scripting_environment,
-                                   const std::string &original_edge_data_filename,
-                                   const std::string &turn_lane_data_filename,
-                                   const std::string &turn_weight_penalties_filename,
-                                   const std::string &turn_duration_penalties_filename,
-                                   const std::string &turn_penalties_index_filename,
-                                   const std::string &conditional_turn_penalties_filename,
-                                   const RestrictionMap &node_restriction_map,
-                                   const ConditionalRestrictionMap &conditional_restriction_map,
-                                   const WayRestrictionMap &way_restriction_map);
+    void
+    GenerateEdgeExpandedEdges(ScriptingEnvironment &scripting_environment,
+                              const std::string &turn_weight_penalties_filename,
+                              const std::string &turn_duration_penalties_filename,
+                              const std::string &turn_penalties_index_filename,
+                              const std::string &conditional_turn_penalties_filename,
+                              const std::string &maneuver_overrides_filename,
+                              const RestrictionMap &node_restriction_map,
+                              const ConditionalRestrictionMap &conditional_restriction_map,
+                              const WayRestrictionMap &way_restriction_map,
+                              const std::vector<UnresolvedManeuverOverride> &maneuver_overrides);
 
     NBGToEBG InsertEdgeBasedNode(const NodeID u, const NodeID v);
 
-    std::size_t restricted_turns_counter;
-    std::size_t skipped_uturns_counter;
-    std::size_t skipped_barrier_turns_counter;
-
     // mapping of node-based edges to edge-based nodes
     std::vector<NodeID> nbe_to_ebn_mapping;
-    util::ConcurrentIDMap<util::guidance::BearingClass, BearingClassID> bearing_class_hash;
-    std::vector<BearingClassID> bearing_class_by_node_based_node;
-    util::ConcurrentIDMap<util::guidance::EntryClass, EntryClassID> entry_class_hash;
 };
 } // namespace extractor
 } // namespace osrm

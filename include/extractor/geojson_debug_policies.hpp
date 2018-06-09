@@ -10,8 +10,8 @@
 #include "util/node_based_graph.hpp"
 #include "util/typedefs.hpp"
 
-#include "extractor/guidance/coordinate_extractor.hpp"
-#include "extractor/guidance/intersection.hpp"
+#include "guidance/coordinate_extractor.hpp"
+#include "guidance/intersection.hpp"
 #include "util/coordinate.hpp"
 #include "util/geojson_debug_policy_toolkit.hpp"
 
@@ -60,7 +60,7 @@ operator()(const NodeID intersection_node,
            const boost::optional<util::json::Object> &way_style) const
 {
     // request the number of lanes. This process needs to be in sync with what happens over at
-    // intersection_generator
+    // intersection analysis
     const auto intersection_lanes =
         intersection.FindMaximum(guidance::makeExtractLanesForRoad(node_based_graph));
 

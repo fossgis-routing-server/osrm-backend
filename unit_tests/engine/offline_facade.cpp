@@ -208,10 +208,9 @@ class ContiguousInternalMemoryDataFacade<routing_algorithms::offline::Algorithm>
 
     StringView GetDatasourceName(const DatasourceID /*id*/) const override { return StringView{}; }
 
-    extractor::guidance::TurnInstruction
-    GetTurnInstructionForEdgeID(const EdgeID /*id*/) const override
+    guidance::TurnInstruction GetTurnInstructionForEdgeID(const EdgeID /*id*/) const override
     {
-        return extractor::guidance::TurnInstruction{};
+        return guidance::TurnInstruction{};
     }
 
     extractor::TravelMode GetTravelMode(const NodeID /*id*/) const override
@@ -320,7 +319,7 @@ class ContiguousInternalMemoryDataFacade<routing_algorithms::offline::Algorithm>
         return util::guidance::LaneTupleIdPair{};
     }
 
-    extractor::guidance::TurnLaneDescription
+    extractor::TurnLaneDescription
     GetTurnDescription(const LaneDescriptionID /*laneDescriptionID*/) const override
     {
         return {};
@@ -342,14 +341,14 @@ class ContiguousInternalMemoryDataFacade<routing_algorithms::offline::Algorithm>
     ComponentID GetComponentID(NodeID) const override { return ComponentID{}; }
     bool ExcludeNode(const NodeID) const override { return false; }
 
-    util::guidance::TurnBearing PreTurnBearing(const EdgeID /*eid*/) const override
+    guidance::TurnBearing PreTurnBearing(const EdgeID /*eid*/) const override
     {
-        return util::guidance::TurnBearing(0);
+        return guidance::TurnBearing(0);
     }
 
-    util::guidance::TurnBearing PostTurnBearing(const EdgeID /*eid*/) const override
+    guidance::TurnBearing PostTurnBearing(const EdgeID /*eid*/) const override
     {
-        return util::guidance::TurnBearing(0);
+        return guidance::TurnBearing(0);
     }
 
     util::guidance::BearingClass
@@ -367,6 +366,12 @@ class ContiguousInternalMemoryDataFacade<routing_algorithms::offline::Algorithm>
     util::guidance::EntryClass GetEntryClass(const EdgeID /*turn_id*/) const override { return {}; }
     bool IsLeftHandDriving(const NodeID /*id*/) const override { return false; }
     bool IsSegregated(const NodeID /*id*/) const override { return false; }
+
+    std::vector<extractor::ManeuverOverride>
+    GetOverridesThatStartAt(const NodeID /* edge_based_node_id */) const override
+    {
+        return {};
+    }
 };
 
 } // datafacade

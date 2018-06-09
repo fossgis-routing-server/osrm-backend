@@ -2,9 +2,9 @@
 
 #include "extractor/compressed_edge_container.hpp"
 #include "extractor/extraction_turn.hpp"
-#include "extractor/guidance/intersection.hpp"
 #include "extractor/restriction.hpp"
 #include "extractor/restriction_compressor.hpp"
+#include "guidance/intersection.hpp"
 
 #include "util/dynamic_graph.hpp"
 #include "util/node_based_graph.hpp"
@@ -26,6 +26,7 @@ void GraphCompressor::Compress(
     ScriptingEnvironment &scripting_environment,
     std::vector<TurnRestriction> &turn_restrictions,
     std::vector<ConditionalTurnRestriction> &conditional_turn_restrictions,
+    std::vector<UnresolvedManeuverOverride> &maneuver_overrides,
     util::NodeBasedDynamicGraph &graph,
     const std::vector<NodeBasedEdgeAnnotation> &node_data_container,
     CompressedEdgeContainer &geometry_compressor)
@@ -33,7 +34,8 @@ void GraphCompressor::Compress(
     const unsigned original_number_of_nodes = graph.GetNumberOfNodes();
     const unsigned original_number_of_edges = graph.GetNumberOfEdges();
 
-    RestrictionCompressor restriction_compressor(turn_restrictions, conditional_turn_restrictions);
+    RestrictionCompressor restriction_compressor(
+        turn_restrictions, conditional_turn_restrictions, maneuver_overrides);
 
     // we do not compress turn restrictions on degree two nodes. These nodes are usually used to
     // indicated `directed` barriers
@@ -186,9 +188,9 @@ void GraphCompressor::Compress(
                 const auto selectAnnotation = [&node_data_container](
                     const AnnotationID front_annotation, const AnnotationID back_annotation) {
                     // A lane has tags: u - (front) - v - (back) - w
-                    // During contraction, we keep only one of the tags. Usually the one closer to
-                    // the intersection is preferred. If its empty, however, we keep the non-empty
-                    // one
+                    // During contraction, we keep only one of the tags. Usually the one closer
+                    // to the intersection is preferred. If its empty, however, we keep the
+                    // non-empty one
                     if (node_data_container[back_annotation].lane_description_id ==
                         INVALID_LANE_DESCRIPTIONID)
                         return front_annotation;
@@ -211,8 +213,8 @@ void GraphCompressor::Compress(
                 // doesn't have access to.
                 */
                 const bool has_node_penalty = traffic_signals.find(node_v) != traffic_signals.end();
-                boost::optional<EdgeDuration> node_duration_penalty = boost::none;
-                boost::optional<EdgeWeight> node_weight_penalty = boost::none;
+                EdgeDuration node_duration_penalty = MAXIMAL_EDGE_DURATION;
+                EdgeWeight node_weight_penalty = INVALID_EDGE_WEIGHT;
                 if (has_node_penalty)
                 {
                     // we cannot handle this as node penalty, if it depends on turn direction
@@ -220,17 +222,33 @@ void GraphCompressor::Compress(
                         continue;
 
                     // generate an artifical turn for the turn penalty generation
-                    ExtractionTurn extraction_turn(
-                        0,
-                        2,
-                        false,
-                        true,
-                        fwd_edge_data1.flags.restricted,
-                        fwd_edge_data2.flags.restricted,
-                        node_data_container[fwd_edge_data1.annotation_data].is_left_hand_driving,
-                        TRAVEL_MODE_DRIVING,
-                        TRAVEL_MODE_DRIVING);
-
+                    std::vector<ExtractionTurnLeg> roads_on_the_right;
+                    std::vector<ExtractionTurnLeg> roads_on_the_left;
+                    ExtractionTurn extraction_turn(0,
+                                                   2,
+                                                   false,
+                                                   true,
+                                                   false,
+                                                   false,
+                                                   TRAVEL_MODE_DRIVING,
+                                                   false,
+                                                   false,
+                                                   1,
+                                                   0,
+                                                   0,
+                                                   0,
+                                                   0,
+                                                   false,
+                                                   TRAVEL_MODE_DRIVING,
+                                                   false,
+                                                   false,
+                                                   1,
+                                                   0,
+                                                   0,
+                                                   0,
+                                                   0,
+                                                   roads_on_the_right,
+                                                   roads_on_the_left);
                     scripting_environment.ProcessTurn(extraction_turn);
                     node_duration_penalty = extraction_turn.duration * 10;
                     node_weight_penalty = extraction_turn.weight * weight_multiplier;
@@ -261,12 +279,13 @@ void GraphCompressor::Compress(
                 graph.GetEdgeData(forward_e1).duration += forward_duration2;
                 graph.GetEdgeData(reverse_e1).duration += reverse_duration2;
 
-                if (node_weight_penalty && node_duration_penalty)
+                if (node_weight_penalty != INVALID_EDGE_WEIGHT &&
+                    node_duration_penalty != MAXIMAL_EDGE_DURATION)
                 {
-                    graph.GetEdgeData(forward_e1).weight += *node_weight_penalty;
-                    graph.GetEdgeData(reverse_e1).weight += *node_weight_penalty;
-                    graph.GetEdgeData(forward_e1).duration += *node_duration_penalty;
-                    graph.GetEdgeData(reverse_e1).duration += *node_duration_penalty;
+                    graph.GetEdgeData(forward_e1).weight += node_weight_penalty;
+                    graph.GetEdgeData(reverse_e1).weight += node_weight_penalty;
+                    graph.GetEdgeData(forward_e1).duration += node_duration_penalty;
+                    graph.GetEdgeData(reverse_e1).duration += node_duration_penalty;
                 }
 
                 // extend e1's to targets of e2's

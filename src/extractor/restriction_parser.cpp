@@ -107,12 +107,12 @@ RestrictionParser::TryParse(const osmium::Relation &relation) const
         const std::string value(fi_begin->value());
 
         // documented OSM restriction tags start either with only_* or no_*;
-        // check and return on these values, and ignore unrecognized values
+        // check and return on these values, and ignore no_*_on_red or unrecognized values
         if (value.find("only_") == 0)
         {
             is_only_restriction = true;
         }
-        else if (value.find("no_") == 0)
+        else if (value.find("no_") == 0 && !boost::algorithm::ends_with(value, "_on_red"))
         {
             is_only_restriction = false;
         }
@@ -127,7 +127,10 @@ RestrictionParser::TryParse(const osmium::Relation &relation) const
     InputConditionalTurnRestriction restriction_container;
     restriction_container.is_only = is_only_restriction;
 
-    boost::optional<std::uint64_t> from = boost::none, via = boost::none, to = boost::none;
+    constexpr auto INVALID_OSM_ID = std::numeric_limits<std::uint64_t>::max();
+    auto from = INVALID_OSM_ID;
+    auto via = INVALID_OSM_ID;
+    auto to = INVALID_OSM_ID;
     bool is_node_restriction = true;
 
     for (const auto &member : relation.members())
@@ -208,17 +211,17 @@ RestrictionParser::TryParse(const osmium::Relation &relation) const
         }
     }
 
-    if (from && via && to)
+    if (from != INVALID_OSM_ID && via != INVALID_OSM_ID && to != INVALID_OSM_ID)
     {
         if (is_node_restriction)
         {
             // template struct requires bracket for ID initialisation :(
-            restriction_container.node_or_way = InputNodeRestriction{{*from}, {*via}, {*to}};
+            restriction_container.node_or_way = InputNodeRestriction{{from}, {via}, {to}};
         }
         else
         {
             // template struct requires bracket for ID initialisation :(
-            restriction_container.node_or_way = InputWayRestriction{{*from}, {*via}, {*to}};
+            restriction_container.node_or_way = InputWayRestriction{{from}, {via}, {to}};
         }
         return restriction_container;
     }

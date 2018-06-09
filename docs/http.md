@@ -288,6 +288,7 @@ In addition to the [general options](#general-options) the following options are
 |radiuses    |`{radius};{radius}[;{radius} ...]`              |Standard deviation of GPS precision used for map matching. If applicable use GPS accuracy.|
 |gaps        |`split` (default), `ignore`                     |Allows the input track splitting based on huge timestamp gaps between points.             |
 |tidy        |`true`, `false` (default)                       |Allows the input track modification to obtain better matching quality for noisy tracks.   |
+|waypoints   | `{index};{index};{index}...`                   |Treats input coordinates indicated by given indices as waypoints in returned Match object. Default is to treat all input coordinates as waypoints.    |
 
 |Parameter   |Values                             |
 |------------|-----------------------------------|
@@ -514,10 +515,10 @@ Represents a route between two waypoints.
 
 - `annotation`: Additional details about each coordinate along the route geometry:
 
-| annotations  |                                                                       |
-|--------------|-----------------------------------------------------------------------|
-| true         | An `Annotation` object containing node ids, durations distances and   |
-| false        | weights `undefined`                                                   |
+| annotations  |                                                                               |
+|--------------|-------------------------------------------------------------------------------|
+| true         | An `Annotation` object containing node ids, durations, distances and weights. |
+| false        | `undefined`                                                                   |
 
 #### Example
 
@@ -586,7 +587,7 @@ step.
 
 - `name`: The name of the way along which travel proceeds.
 - `ref`: A reference number or code for the way. Optionally included, if ref data is available for the given way.
-- `pronunciation`: The pronunciation hint of the way name. Will be `undefined` if there is no pronunciation hit.
+- `pronunciation`: A string containing an [IPA](https://en.wikipedia.org/wiki/International_Phonetic_Alphabet) phonetic transcription indicating how to pronounce the name in the `name` property. This property is omitted if pronunciation data is unavailable for the step.
 - `destinations`: The destinations of the way. Will be `undefined` if there are no destinations.
 - `exits`: The exit numbers or names of the way. Will be `undefined` if there are no exit numbers or names.
 - `mode`: A string signifying the mode of transportation.

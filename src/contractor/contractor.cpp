@@ -35,6 +35,9 @@
 #include <memory>
 #include <vector>
 
+#include <boost/assert.hpp>
+
+#include <tbb/task_scheduler_init.h>
 namespace osrm
 {
 namespace contractor
@@ -42,6 +45,9 @@ namespace contractor
 
 int Contractor::Run()
 {
+    tbb::task_scheduler_init init(config.requested_num_threads);
+    BOOST_ASSERT(init.is_active());
+
     if (config.core_factor != 1.0)
     {
         util::Log(logWARNING)
@@ -70,8 +76,9 @@ int Contractor::Run()
     std::vector<extractor::EdgeBasedEdge> edge_based_edge_list;
 
     updater::Updater updater(config.updater_config);
-    EdgeID number_of_edge_based_nodes =
-        updater.LoadAndUpdateEdgeExpandedGraph(edge_based_edge_list, node_weights);
+    std::uint32_t connectivity_checksum = 0;
+    EdgeID number_of_edge_based_nodes = updater.LoadAndUpdateEdgeExpandedGraph(
+        edge_based_edge_list, node_weights, connectivity_checksum);
 
     // Contracting the edge-expanded graph
 
@@ -103,7 +110,8 @@ int Contractor::Run()
     util::Log() << "Contracted graph has " << query_graph.GetNumberOfEdges() << " edges.";
     util::Log() << "Contraction took " << TIMER_SEC(contraction) << " sec";
 
-    files::writeGraph(config.GetPath(".osrm.hsgr"), checksum, query_graph, edge_filters);
+    files::writeGraph(
+        config.GetPath(".osrm.hsgr"), checksum, query_graph, edge_filters, connectivity_checksum);
 
     TIMER_STOP(preparing);
 
