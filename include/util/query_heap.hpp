@@ -128,6 +128,67 @@ template <typename NodeID, typename Key> class UnorderedMapStorage
 
 template <typename NodeID,
           typename Key,
+          template <typename N, typename K> class BaseIndexStorage = UnorderedMapStorage,
+          template <typename N, typename K> class OverlayIndexStorage = ArrayStorage>
+class TwoLevelStorage
+{
+  public:
+    explicit TwoLevelStorage(std::size_t number_of_nodes, std::size_t number_of_overlay_nodes)
+        : number_of_overlay_nodes(number_of_overlay_nodes), base(number_of_nodes),
+          overlay(number_of_overlay_nodes)
+    {
+    }
+
+    Key &operator[](const NodeID node)
+    {
+        if (node < number_of_overlay_nodes)
+        {
+            return overlay[node];
+        }
+        else
+        {
+            return base[node];
+        }
+    }
+
+    Key peek_index(const NodeID node) const
+    {
+        if (node < number_of_overlay_nodes)
+        {
+            return overlay.peek_index(node);
+        }
+        else
+        {
+            return base.peek_index(node);
+        }
+    }
+
+    Key const &operator[](const NodeID node) const
+    {
+        if (node < number_of_overlay_nodes)
+        {
+            return overlay[node];
+        }
+        else
+        {
+            return base[node];
+        }
+    }
+
+    void Clear()
+    {
+        base.Clear();
+        overlay.Clear();
+    }
+
+  private:
+    const std::size_t number_of_overlay_nodes;
+    BaseIndexStorage<NodeID, Key> base;
+    OverlayIndexStorage<NodeID, Key> overlay;
+};
+
+template <typename NodeID,
+          typename Key,
           typename Weight,
           typename Data,
           typename IndexStorage = ArrayStorage<NodeID, NodeID>>
@@ -137,7 +198,10 @@ class QueryHeap
     using WeightType = Weight;
     using DataType = Data;
 
-    explicit QueryHeap(std::size_t maxID) : node_index(maxID) { Clear(); }
+    template <typename... StorageArgs> explicit QueryHeap(StorageArgs... args) : node_index(args...)
+    {
+        Clear();
+    }
 
     void Clear()
     {

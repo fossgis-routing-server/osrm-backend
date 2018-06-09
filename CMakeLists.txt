@@ -1,5 +1,4 @@
-cmake_minimum_required(VERSION 2.8.11)
-# we depend on 2.8.11 introducing target_include_directories
+cmake_minimum_required(VERSION 3.1)
 
 if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_CURRENT_BINARY_DIR AND NOT MSVC_IDE)
   message(FATAL_ERROR "In-source builds are not allowed.
@@ -59,12 +58,26 @@ if (POLICY CMP0048)
   cmake_policy(SET CMP0048 OLD)
 endif()
 project(OSRM C CXX)
-set(OSRM_VERSION_MAJOR 5)
-set(OSRM_VERSION_MINOR 16)
-set(OSRM_VERSION_PATCH 0)
-set(OSRM_VERSION "${OSRM_VERSION_MAJOR}.${OSRM_VERSION_MINOR}.${OSRM_VERSION_PATCH}")
 
-add_definitions(-DOSRM_PROJECT_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+include(JSONParser)
+file(READ "package.json" packagejsonraw)
+sbeParseJson(packagejson packagejsonraw)
+
+if (packagejson.version MATCHES "^([0-9]+)\.([0-9]+)\.([0-9]+)")
+    set(OSRM_VERSION_MAJOR ${CMAKE_MATCH_1})
+    set(OSRM_VERSION_MINOR ${CMAKE_MATCH_2})
+    set(OSRM_VERSION_PATCH ${CMAKE_MATCH_3})
+
+    set(OSRM_VERSION "${OSRM_VERSION_MAJOR}.${OSRM_VERSION_MINOR}.${OSRM_VERSION_PATCH}")
+else()
+    message(FATAL_ERROR "Version from package.json cannot be parsed, expected semver compatible X.Y.Z, but found ${packagejson.version}")
+endif()
+
+if (MSVC)
+  add_definitions("-DOSRM_PROJECT_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}\"")
+else()
+  add_definitions(-DOSRM_PROJECT_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+endif()
 
 # these two functions build up custom variables:
 #   DEPENDENCIES_INCLUDE_DIRS and OSRM_DEFINES
@@ -153,15 +166,15 @@ add_executable(osrm-partition src/tools/partition.cpp)
 add_executable(osrm-customize src/tools/customize.cpp)
 add_executable(osrm-contract src/tools/contract.cpp)
 add_executable(osrm-routed src/tools/routed.cpp $<TARGET_OBJECTS:SERVER> $<TARGET_OBJECTS:UTIL>)
-add_executable(osrm-datastore src/tools/store.cpp $<TARGET_OBJECTS:UTIL>)
-add_library(osrm src/osrm/osrm.cpp $<TARGET_OBJECTS:ENGINE> $<TARGET_OBJECTS:UTIL> $<TARGET_OBJECTS:STORAGE>)
+add_executable(osrm-datastore src/tools/store.cpp $<TARGET_OBJECTS:MICROTAR> $<TARGET_OBJECTS:UTIL>)
+add_library(osrm src/osrm/osrm.cpp $<TARGET_OBJECTS:ENGINE> $<TARGET_OBJECTS:STORAGE> $<TARGET_OBJECTS:MICROTAR> $<TARGET_OBJECTS:UTIL> )
 add_library(osrm_contract src/osrm/contractor.cpp $<TARGET_OBJECTS:CONTRACTOR> $<TARGET_OBJECTS:UTIL>)
-add_library(osrm_extract src/osrm/extractor.cpp $<TARGET_OBJECTS:EXTRACTOR> $<TARGET_OBJECTS:UTIL>)
+add_library(osrm_extract src/osrm/extractor.cpp $<TARGET_OBJECTS:EXTRACTOR> $<TARGET_OBJECTS:MICROTAR> $<TARGET_OBJECTS:UTIL>)
 add_library(osrm_guidance $<TARGET_OBJECTS:GUIDANCE> $<TARGET_OBJECTS:UTIL>)
-add_library(osrm_partition src/osrm/partitioner.cpp $<TARGET_OBJECTS:PARTITIONER> $<TARGET_OBJECTS:UTIL>)
-add_library(osrm_customize src/osrm/customizer.cpp $<TARGET_OBJECTS:CUSTOMIZER> $<TARGET_OBJECTS:UTIL>)
-add_library(osrm_update $<TARGET_OBJECTS:UPDATER> $<TARGET_OBJECTS:UTIL>)
-add_library(osrm_store $<TARGET_OBJECTS:STORAGE> $<TARGET_OBJECTS:UTIL>)
+add_library(osrm_partition src/osrm/partitioner.cpp $<TARGET_OBJECTS:PARTITIONER> $<TARGET_OBJECTS:MICROTAR> $<TARGET_OBJECTS:UTIL>)
+add_library(osrm_customize src/osrm/customizer.cpp $<TARGET_OBJECTS:CUSTOMIZER> $<TARGET_OBJECTS:MICROTAR> $<TARGET_OBJECTS:UTIL>)
+add_library(osrm_update $<TARGET_OBJECTS:UPDATER> $<TARGET_OBJECTS:MICROTAR> $<TARGET_OBJECTS:UTIL>)
+add_library(osrm_store $<TARGET_OBJECTS:STORAGE> $<TARGET_OBJECTS:MICROTAR> $<TARGET_OBJECTS:UTIL>)
 
 if(ENABLE_GOLD_LINKER)
     execute_process(COMMAND ${CMAKE_C_COMPILER} -fuse-ld=gold -Wl,--version ERROR_QUIET OUTPUT_VARIABLE LD_VERSION)
@@ -482,9 +495,6 @@ if(ENABLE_MASON)
   # note: we avoid calling find_package(Osmium ...) here to ensure that the
   # expat and bzip2 are used from mason rather than the system
   include_directories(SYSTEM ${CMAKE_CURRENT_SOURCE_DIR}/third_party/libosmium/include)
-
-  include_directories(SYSTEM ${CMAKE_CURRENT_SOURCE_DIR}/third_party/rapidjson/include)
-
 else()
 
   find_package(Boost 1.54 REQUIRED COMPONENTS ${BOOST_COMPONENTS})
@@ -542,11 +552,15 @@ else()
   endif()
   find_package(Osmium REQUIRED COMPONENTS io)
   include_directories(SYSTEM ${OSMIUM_INCLUDE_DIR})
-
-  set(RAPIDJSON_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/rapidjson/include")
-  include_directories(SYSTEM ${RAPIDJSON_INCLUDE_DIR})
-
 endif()
+
+set(RAPIDJSON_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/rapidjson/include")
+include_directories(SYSTEM ${RAPIDJSON_INCLUDE_DIR})
+
+set(MICROTAR_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/microtar/src")
+include_directories(SYSTEM ${MICROTAR_INCLUDE_DIR})
+add_library(MICROTAR OBJECT "${CMAKE_CURRENT_SOURCE_DIR}/third_party/microtar/src/microtar.c")
+set_property(TARGET MICROTAR PROPERTY POSITION_INDEPENDENT_CODE ON)
 
 # prefix compilation with ccache by default if available and on clang or gcc
 if(ENABLE_CCACHE AND (CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "GNU"))
@@ -686,7 +700,7 @@ target_link_libraries(osrm_customize ${CUSTOMIZER_LIBRARIES} osrm_update osrm_st
 target_link_libraries(osrm_store ${STORAGE_LIBRARIES})
 
 # BUILD_COMPONENTS
-add_executable(osrm-components src/tools/components.cpp $<TARGET_OBJECTS:UTIL>)
+add_executable(osrm-components src/tools/components.cpp $<TARGET_OBJECTS:MICROTAR> $<TARGET_OBJECTS:UTIL>)
 target_link_libraries(osrm-components ${TBB_LIBRARIES} ${BOOST_BASE_LIBRARIES} ${UTIL_LIBRARIES})
 install(TARGETS osrm-components DESTINATION bin)
 

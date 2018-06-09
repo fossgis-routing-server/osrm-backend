@@ -47,7 +47,7 @@ class OSRMBaseLoader{
           if (err) {
             if (retryCount < 10) {
               retryCount++;
-              setTimeout(() => { tryConnect(this.scope.OSRM_PORT, retry); }, 10);
+              setTimeout(() => { tryConnect(this.scope.OSRM_IP, this.scope.OSRM_PORT, retry); }, 10);
             } else {
               callback(new Error("Could not connect to osrm-routed after ten retries."));
             }
@@ -58,7 +58,7 @@ class OSRMBaseLoader{
           }
         };
 
-        tryConnect(this.scope.OSRM_PORT, retry);
+        tryConnect(this.scope.OSRM_IP, this.scope.OSRM_PORT, retry);
     }
 };
 
@@ -77,7 +77,7 @@ class OSRMDirectLoader extends OSRMBaseLoader {
     osrmUp (callback) {
         if (this.osrmIsRunning()) return callback(new Error("osrm-routed already running!"));
 
-        const command_arguments = util.format('%s -p %d -a %s', this.inputFile, this.scope.OSRM_PORT, this.scope.ROUTING_ALGORITHM);
+        const command_arguments = util.format('%s -p %d -i %s -a %s', this.inputFile, this.scope.OSRM_PORT, this.scope.OSRM_IP, this.scope.ROUTING_ALGORITHM);
         this.child = this.scope.runBin('osrm-routed', command_arguments, this.scope.environment, (err) => {
             if (err && err.signal !== 'SIGINT') {
                 this.child = null;
@@ -107,7 +107,8 @@ class OSRMDatastoreLoader extends OSRMBaseLoader {
     }
 
     loadData (callback) {
-        this.scope.runBin('osrm-datastore', this.inputFile, this.scope.environment, (err) => {
+        const command_arguments = util.format('--dataset-name=%s %s', this.scope.DATASET_NAME, this.inputFile);
+        this.scope.runBin('osrm-datastore', command_arguments, this.scope.environment, (err) => {
             if (err) return callback(new Error('*** osrm-datastore exited with ' + err.code + ': ' + err));
             callback();
         });
@@ -116,7 +117,7 @@ class OSRMDatastoreLoader extends OSRMBaseLoader {
     osrmUp (callback) {
         if (this.osrmIsRunning()) return callback();
 
-        const command_arguments = util.format('--shared-memory=1 -p %d -a %s', this.scope.OSRM_PORT, this.scope.ROUTING_ALGORITHM);
+        const command_arguments = util.format('--dataset-name=%s -s -i %s -p %d -a %s', this.scope.DATASET_NAME, this.scope.OSRM_IP, this.scope.OSRM_PORT, this.scope.ROUTING_ALGORITHM);
         this.child = this.scope.runBin('osrm-routed', command_arguments, this.scope.environment, (err) => {
             if (err && err.signal !== 'SIGINT') {
                 this.child = null;

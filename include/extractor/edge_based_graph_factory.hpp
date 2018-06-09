@@ -9,20 +9,16 @@
 #include "extractor/edge_based_node_segment.hpp"
 #include "extractor/extraction_turn.hpp"
 #include "extractor/maneuver_override.hpp"
+#include "extractor/name_table.hpp"
 #include "extractor/nbg_to_ebg.hpp"
 #include "extractor/node_data_container.hpp"
 #include "extractor/query_node.hpp"
 #include "extractor/restriction_index.hpp"
 #include "extractor/turn_lane_types.hpp"
 #include "extractor/way_restriction_map.hpp"
-#include "guidance/turn_analysis.hpp"
-#include "guidance/turn_instruction.hpp"
 
 #include "util/concurrent_id_map.hpp"
 #include "util/deallocating_vector.hpp"
-#include "util/guidance/bearing_class.hpp"
-#include "util/guidance/entry_class.hpp"
-#include "util/name_table.hpp"
 #include "util/node_based_graph.hpp"
 #include "util/typedefs.hpp"
 
@@ -74,7 +70,7 @@ class EdgeBasedGraphFactory
                                    const std::unordered_set<NodeID> &barrier_nodes,
                                    const std::unordered_set<NodeID> &traffic_lights,
                                    const std::vector<util::Coordinate> &coordinates,
-                                   const util::NameTable &name_table,
+                                   const NameTable &name_table,
                                    const std::unordered_set<EdgeID> &segregated_edges,
                                    const LaneDescriptionMap &lane_description_map);
 
@@ -98,17 +94,6 @@ class EdgeBasedGraphFactory
     std::uint32_t GetConnectivityChecksum() const;
 
     std::uint64_t GetNumberOfEdgeBasedNodes() const;
-
-    // Basic analysis of a turn (u --(e1)-- v --(e2)-- w)
-    // with known angle.
-    // Handles special cases like u-turns and roundabouts
-    // For basic turns, the turn based on the angle-classification is returned
-    guidance::TurnInstruction AnalyzeTurn(const NodeID u,
-                                          const EdgeID e1,
-                                          const NodeID v,
-                                          const EdgeID e2,
-                                          const NodeID w,
-                                          const double angle) const;
 
   private:
     using EdgeData = util::NodeBasedDynamicGraph::EdgeData;
@@ -153,7 +138,7 @@ class EdgeBasedGraphFactory
     const std::unordered_set<NodeID> &m_traffic_lights;
     const CompressedEdgeContainer &m_compressed_edge_container;
 
-    const util::NameTable &name_table;
+    const NameTable &name_table;
     const std::unordered_set<EdgeID> &segregated_edges;
     const LaneDescriptionMap &lane_description_map;
 

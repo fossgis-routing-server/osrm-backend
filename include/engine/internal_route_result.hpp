@@ -139,22 +139,38 @@ inline InternalRouteResult CollapseInternalRouteResult(const InternalRouteResult
         {
             BOOST_ASSERT(!collapsed.unpacked_path_segments.empty());
             auto &last_segment = collapsed.unpacked_path_segments.back();
-            // deduplicate last segment (needs to be checked for empty for the same node query edge
-            // case)
-            if (!last_segment.empty())
-                last_segment.pop_back();
-            // update target phantom node of leg
             BOOST_ASSERT(!collapsed.segment_end_coordinates.empty());
             collapsed.segment_end_coordinates.back().target_phantom =
                 leggy_result.segment_end_coordinates[i].target_phantom;
             collapsed.target_traversed_in_reverse.back() =
                 leggy_result.target_traversed_in_reverse[i];
             // copy path segments into current leg
-            last_segment.insert(last_segment.end(),
-                                leggy_result.unpacked_path_segments[i].begin(),
-                                leggy_result.unpacked_path_segments[i].end());
+            if (!leggy_result.unpacked_path_segments[i].empty())
+            {
+                auto old_size = last_segment.size();
+                last_segment.insert(last_segment.end(),
+                                    leggy_result.unpacked_path_segments[i].begin(),
+                                    leggy_result.unpacked_path_segments[i].end());
+
+                // The first segment of the unpacked path is missing the weight of the
+                // source phantom.  We need to add those values back so that the total
+                // edge weight is correct
+                last_segment[old_size].weight_until_turn +=
+
+                    leggy_result.source_traversed_in_reverse[i]
+                        ? leggy_result.segment_end_coordinates[i].source_phantom.reverse_weight
+                        : leggy_result.segment_end_coordinates[i].source_phantom.forward_weight;
+
+                last_segment[old_size].duration_until_turn +=
+                    leggy_result.source_traversed_in_reverse[i]
+                        ? leggy_result.segment_end_coordinates[i].source_phantom.reverse_duration
+                        : leggy_result.segment_end_coordinates[i].source_phantom.forward_duration;
+            }
         }
     }
+
+    BOOST_ASSERT(collapsed.segment_end_coordinates.size() ==
+                 collapsed.unpacked_path_segments.size());
     return collapsed;
 }
 }

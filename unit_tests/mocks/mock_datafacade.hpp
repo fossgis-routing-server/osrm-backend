@@ -54,40 +54,44 @@ class MockBaseDataFacade : public engine::datafacade::BaseDataFacade
     {
         return 0;
     }
-    std::vector<NodeID> GetUncompressedForwardGeometry(const EdgeID /* id */) const override
+    NodeForwardRange GetUncompressedForwardGeometry(const EdgeID /* id */) const override
     {
         return {};
     }
-    std::vector<NodeID> GetUncompressedReverseGeometry(const EdgeID /* id */) const override
+    NodeReverseRange GetUncompressedReverseGeometry(const EdgeID id) const override
+    {
+        return NodeReverseRange(GetUncompressedForwardGeometry(id));
+    }
+    WeightForwardRange GetUncompressedForwardWeights(const EdgeID /* id */) const override
+    {
+        static std::uint64_t data[] = {1, 2, 3};
+        static const extractor::SegmentDataView::SegmentWeightVector weights(
+            util::vector_view<std::uint64_t>(data, 3), 3);
+        return WeightForwardRange(weights.begin(), weights.end());
+    }
+    WeightReverseRange GetUncompressedReverseWeights(const EdgeID id) const override
+    {
+        return WeightReverseRange(GetUncompressedForwardWeights(id));
+    }
+
+    DurationForwardRange GetUncompressedForwardDurations(const EdgeID /*id*/) const override
+    {
+        static std::uint64_t data[] = {1, 2, 3};
+        static const extractor::SegmentDataView::SegmentDurationVector durations(
+            util::vector_view<std::uint64_t>(data, 3), 3);
+        return DurationForwardRange(durations.begin(), durations.end());
+    }
+    DurationReverseRange GetUncompressedReverseDurations(const EdgeID id) const override
+    {
+        return DurationReverseRange(GetUncompressedForwardDurations(id));
+    }
+    DatasourceForwardRange GetUncompressedForwardDatasources(const EdgeID /*id*/) const override
     {
         return {};
     }
-    std::vector<EdgeWeight> GetUncompressedForwardWeights(const EdgeID /* id */) const override
+    DatasourceReverseRange GetUncompressedReverseDatasources(const EdgeID /*id*/) const override
     {
-        std::vector<EdgeWeight> result_weights;
-        result_weights.resize(1);
-        result_weights[0] = 1;
-        return result_weights;
-    }
-    std::vector<EdgeWeight> GetUncompressedReverseWeights(const EdgeID id) const override
-    {
-        return GetUncompressedForwardWeights(id);
-    }
-    std::vector<EdgeWeight> GetUncompressedForwardDurations(const EdgeID id) const override
-    {
-        return GetUncompressedForwardWeights(id);
-    }
-    std::vector<EdgeWeight> GetUncompressedReverseDurations(const EdgeID id) const override
-    {
-        return GetUncompressedForwardWeights(id);
-    }
-    std::vector<DatasourceID> GetUncompressedForwardDatasources(const EdgeID /*id*/) const override
-    {
-        return {};
-    }
-    std::vector<DatasourceID> GetUncompressedReverseDatasources(const EdgeID /*id*/) const override
-    {
-        return {};
+        return DatasourceReverseRange(DatasourceForwardRange());
     }
 
     StringView GetDatasourceName(const DatasourceID) const override final { return {}; }
@@ -197,7 +201,7 @@ class MockBaseDataFacade : public engine::datafacade::BaseDataFacade
         return {};
     }
 
-    unsigned GetCheckSum() const override { return 0; }
+    std::uint32_t GetCheckSum() const override { return 0; }
 
     extractor::TravelMode GetTravelMode(const NodeID /* id */) const override
     {
@@ -219,7 +223,6 @@ class MockBaseDataFacade : public engine::datafacade::BaseDataFacade
     StringView GetDestinationsForID(const NameID) const override final { return {}; }
     StringView GetExitsForID(const NameID) const override final { return {}; }
 
-    std::string GetTimestamp() const override { return ""; }
     bool GetContinueStraightDefault() const override { return true; }
     double GetMapMatchingMaxSpeed() const override { return 180 / 3.6; }
     const char *GetWeightName() const override final { return "duration"; }

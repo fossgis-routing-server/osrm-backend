@@ -90,12 +90,17 @@ inline unsigned generateServerProgramOptions(const int argc,
 
     // declare a group of options that will be allowed only on command line
     boost::program_options::options_description generic_options("Options");
-    generic_options.add_options() //
-        ("version,v", "Show version")("help,h", "Show this help message")(
-            "verbosity,l",
-            boost::program_options::value<std::string>(&config.verbosity)->default_value("INFO"),
-            std::string("Log verbosity level: " + util::LogPolicy::GetLevels()).c_str())(
-            "trial", value<bool>(&trial)->implicit_value(true), "Quit after initialization");
+    generic_options.add_options()            //
+        ("version,v", "Show version")        //
+        ("help,h", "Show this help message") //
+        ("verbosity,l",
+#ifdef NDEBUG
+         boost::program_options::value<std::string>(&config.verbosity)->default_value("INFO"),
+#else
+         boost::program_options::value<std::string>(&config.verbosity)->default_value("DEBUG"),
+#endif
+         std::string("Log verbosity level: " + util::LogPolicy::GetLevels()).c_str()) //
+        ("trial", value<bool>(&trial)->implicit_value(true), "Quit after initialization");
 
     // declare a group of options that will be allowed on command line
     boost::program_options::options_description config_options("Configuration");
@@ -112,6 +117,12 @@ inline unsigned generateServerProgramOptions(const int argc,
         ("shared-memory,s",
          value<bool>(&config.use_shared_memory)->implicit_value(true)->default_value(false),
          "Load data from shared memory") //
+        ("memory_file",
+         value<boost::filesystem::path>(&config.memory_file),
+         "Store data in a memory mapped file rather than in process memory.") //
+        ("dataset-name",
+         value<std::string>(&config.dataset_name),
+         "Name of the shared memory dataset to connect to.") //
         ("algorithm,a",
          value<EngineConfig::Algorithm>(&config.algorithm)
              ->default_value(EngineConfig::Algorithm::CH, "CH"),

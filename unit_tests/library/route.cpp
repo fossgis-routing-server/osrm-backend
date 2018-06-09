@@ -407,12 +407,20 @@ BOOST_AUTO_TEST_CASE(speed_annotation_matches_duration_and_distance)
     const auto &durations = annotation.values.at("duration").get<json::Array>().values;
     const auto &distances = annotation.values.at("distance").get<json::Array>().values;
     int length = speeds.size();
+
+    BOOST_CHECK_EQUAL(length, 1);
     for (int i = 0; i < length; i++)
     {
         auto speed = speeds[i].get<json::Number>().value;
         auto duration = durations[i].get<json::Number>().value;
         auto distance = distances[i].get<json::Number>().value;
-        BOOST_CHECK_EQUAL(speed, std::round(distance / duration * 10.) / 10.);
+        auto calc = std::round(distance / duration * 10.) / 10.;
+        BOOST_CHECK_EQUAL(speed, std::isnan(calc) ? 0 : calc);
+
+        // Because we route from/to the same location, all annotations should be 0;
+        BOOST_CHECK_EQUAL(speed, 0);
+        BOOST_CHECK_EQUAL(distance, 0);
+        BOOST_CHECK_EQUAL(duration, 0);
     }
 }
 
@@ -445,7 +453,7 @@ BOOST_AUTO_TEST_CASE(test_manual_setting_of_annotations_property)
                            .values["annotation"]
                            .get<json::Object>()
                            .values;
-    BOOST_CHECK_EQUAL(annotations.size(), 5);
+    BOOST_CHECK_EQUAL(annotations.size(), 6);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

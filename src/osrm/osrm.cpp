@@ -1,4 +1,5 @@
 #include "osrm/osrm.hpp"
+
 #include "engine/algorithm.hpp"
 #include "engine/api/match_parameters.hpp"
 #include "engine/api/nearest_parameters.hpp"
@@ -27,46 +28,14 @@ OSRM::OSRM(engine::EngineConfig &config)
         throw util::exception("Required files are missing, cannot continue.  Have all the "
                               "pre-processing steps been run?");
     }
-    else if (config.use_shared_memory)
-    {
-        storage::SharedMonitor<storage::SharedDataTimestamp> barrier;
-        using mutex_type = typename decltype(barrier)::mutex_type;
-        boost::interprocess::scoped_lock<mutex_type> current_region_lock(barrier.get_mutex());
-
-        auto mem = storage::makeSharedMemory(barrier.data().region);
-        auto layout = reinterpret_cast<storage::DataLayout *>(mem->Ptr());
-        if (layout->GetBlockSize(storage::DataLayout::NAME_CHAR_DATA) == 0)
-            throw util::exception(
-                "No name data loaded, cannot continue.  Have you run osrm-datastore to load data?");
-    }
 
     // Now, check that the algorithm requested can be used with the data
     // that's available.
 
-    if (config.algorithm == EngineConfig::Algorithm::CH ||
-        config.algorithm == EngineConfig::Algorithm::CoreCH)
+    if (config.algorithm == EngineConfig::Algorithm::CoreCH)
     {
-        if (config.algorithm == EngineConfig::Algorithm::CoreCH)
-        {
-            util::Log(logWARNING) << "Using CoreCH is deprecated. Falling back to CH";
-            config.algorithm = EngineConfig::Algorithm::CH;
-        }
-        bool ch_compatible = engine::Engine<CH>::CheckCompatibility(config);
-
-        // throw error if dataset is not usable with CH
-        if (config.algorithm == EngineConfig::Algorithm::CH && !ch_compatible)
-        {
-            throw util::exception("Dataset is not compatible with CH");
-        }
-    }
-    else if (config.algorithm == EngineConfig::Algorithm::MLD)
-    {
-        bool mld_compatible = engine::Engine<MLD>::CheckCompatibility(config);
-        // throw error if dataset is not usable with MLD
-        if (!mld_compatible)
-        {
-            throw util::exception("Dataset is not compatible with MLD.");
-        }
+        util::Log(logWARNING) << "Using CoreCH is deprecated. Falling back to CH";
+        config.algorithm = EngineConfig::Algorithm::CH;
     }
 
     switch (config.algorithm)

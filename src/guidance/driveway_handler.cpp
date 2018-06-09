@@ -17,7 +17,7 @@ DrivewayHandler::DrivewayHandler(const util::NodeBasedDynamicGraph &node_based_g
                                  const extractor::RestrictionMap &node_restriction_map,
                                  const std::unordered_set<NodeID> &barrier_nodes,
                                  const extractor::TurnLanesIndexedArray &turn_lanes_data,
-                                 const util::NameTable &name_table,
+                                 const extractor::NameTable &name_table,
                                  const extractor::SuffixTable &street_name_suffix_table)
     : IntersectionHandler(node_based_graph,
                           node_data_container,
@@ -77,6 +77,18 @@ operator()(const NodeID nid, const EdgeID source_edge_id, Intersection intersect
 
     road->instruction.type =
         isSameName(source_edge_id, road->eid) ? TurnType::NoTurn : TurnType::NewName;
+
+    if (road->instruction.direction_modifier == DirectionModifier::Straight)
+    {
+        std::for_each(intersection.begin() + 1, road, [](auto &side_road) {
+            if (side_road.instruction.direction_modifier == DirectionModifier::Straight)
+                side_road.instruction.direction_modifier = DirectionModifier::SlightRight;
+        });
+        std::for_each(road + 1, intersection.end(), [](auto &side_road) {
+            if (side_road.instruction.direction_modifier == DirectionModifier::Straight)
+                side_road.instruction.direction_modifier = DirectionModifier::SlightLeft;
+        });
+    }
 
     return intersection;
 }

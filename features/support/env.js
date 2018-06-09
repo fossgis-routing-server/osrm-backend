@@ -27,6 +27,7 @@ module.exports = function () {
             return callback(new Error('*** '+stxxl_config+ 'does not exist'));
         }
 
+        this.DATASET_NAME = 'cucumber';
         this.PLATFORM_WINDOWS = process.platform.match(/^win.*/);
         this.DEFAULT_ENVIRONMENT = Object.assign({STXXLCFG: stxxl_config}, process.env);
         this.DEFAULT_PROFILE = 'bicycle';
@@ -43,7 +44,8 @@ module.exports = function () {
         this.TIMEZONE_NAMES = this.PLATFORM_WINDOWS ? 'win' : 'iana';
 
         this.OSRM_PORT = process.env.OSRM_PORT && parseInt(process.env.OSRM_PORT) || 5000;
-        this.HOST = 'http://127.0.0.1:' + this.OSRM_PORT;
+        this.OSRM_IP = process.env.OSRM_IP || '127.0.0.1';
+        this.HOST = `http://${this.OSRM_IP}:${this.OSRM_PORT}`;
 
         this.OSRM_PROFILE = process.env.OSRM_PROFILE;
 
@@ -93,7 +95,7 @@ module.exports = function () {
     };
 
     this.verifyOSRMIsNotRunning = (callback) => {
-        tryConnect(this.OSRM_PORT, (err) => {
+        tryConnect(this.OSRM_IP, this.OSRM_PORT, (err) => {
             if (!err) return callback(new Error('*** osrm-routed is already running.'));
             else callback();
         });

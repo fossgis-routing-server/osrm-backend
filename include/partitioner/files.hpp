@@ -24,10 +24,10 @@ inline void readGraph(const boost::filesystem::path &path,
                       std::is_same<customizer::MultiLevelEdgeBasedGraph, MultiLevelGraphT>::value,
                   "");
 
-    const auto fingerprint = storage::io::FileReader::VerifyFingerprint;
-    storage::io::FileReader reader{path, fingerprint};
+    storage::tar::FileReader reader{path, storage::tar::FileReader::VerifyFingerprint};
 
-    serialization::read(reader, graph, connectivity_checksum);
+    reader.ReadInto("/mld/connectivity_checksum", connectivity_checksum);
+    serialization::read(reader, "/mld/multilevelgraph", graph);
 }
 
 // writes .osrm.mldgr file
@@ -40,10 +40,11 @@ inline void writeGraph(const boost::filesystem::path &path,
                       std::is_same<customizer::MultiLevelEdgeBasedGraph, MultiLevelGraphT>::value,
                   "");
 
-    const auto fingerprint = storage::io::FileWriter::GenerateFingerprint;
-    storage::io::FileWriter writer{path, fingerprint};
+    storage::tar::FileWriter writer{path, storage::tar::FileWriter::GenerateFingerprint};
 
-    serialization::write(writer, graph, connectivity_checksum);
+    writer.WriteElementCount64("/mld/connectivity_checksum", 1);
+    writer.WriteFrom("/mld/connectivity_checksum", connectivity_checksum);
+    serialization::write(writer, "/mld/multilevelgraph", graph);
 }
 
 // read .osrm.partition file
@@ -54,10 +55,10 @@ inline void readPartition(const boost::filesystem::path &path, MultiLevelPartiti
                       std::is_same<MultiLevelPartition, MultiLevelPartitionT>::value,
                   "");
 
-    const auto fingerprint = storage::io::FileReader::VerifyFingerprint;
-    storage::io::FileReader reader{path, fingerprint};
+    const auto fingerprint = storage::tar::FileReader::VerifyFingerprint;
+    storage::tar::FileReader reader{path, fingerprint};
 
-    serialization::read(reader, mlp);
+    serialization::read(reader, "/mld/multilevelpartition", mlp);
 }
 
 // writes .osrm.partition file
@@ -68,10 +69,10 @@ inline void writePartition(const boost::filesystem::path &path, const MultiLevel
                       std::is_same<MultiLevelPartition, MultiLevelPartitionT>::value,
                   "");
 
-    const auto fingerprint = storage::io::FileWriter::GenerateFingerprint;
-    storage::io::FileWriter writer{path, fingerprint};
+    const auto fingerprint = storage::tar::FileWriter::GenerateFingerprint;
+    storage::tar::FileWriter writer{path, fingerprint};
 
-    serialization::write(writer, mlp);
+    serialization::write(writer, "/mld/multilevelpartition", mlp);
 }
 
 // reads .osrm.cells file
@@ -82,10 +83,10 @@ inline void readCells(const boost::filesystem::path &path, CellStorageT &storage
                       std::is_same<CellStorage, CellStorageT>::value,
                   "");
 
-    const auto fingerprint = storage::io::FileReader::VerifyFingerprint;
-    storage::io::FileReader reader{path, fingerprint};
+    const auto fingerprint = storage::tar::FileReader::VerifyFingerprint;
+    storage::tar::FileReader reader{path, fingerprint};
 
-    serialization::read(reader, storage);
+    serialization::read(reader, "/mld/cellstorage", storage);
 }
 
 // writes .osrm.cells file
@@ -96,10 +97,10 @@ inline void writeCells(const boost::filesystem::path &path, CellStorageT &storag
                       std::is_same<CellStorage, CellStorageT>::value,
                   "");
 
-    const auto fingerprint = storage::io::FileWriter::GenerateFingerprint;
-    storage::io::FileWriter writer{path, fingerprint};
+    const auto fingerprint = storage::tar::FileWriter::GenerateFingerprint;
+    storage::tar::FileWriter writer{path, fingerprint};
 
-    serialization::write(writer, storage);
+    serialization::write(writer, "/mld/cellstorage", storage);
 }
 }
 }

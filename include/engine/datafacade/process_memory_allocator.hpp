@@ -27,12 +27,11 @@ class ProcessMemoryAllocator : public ContiguousBlockAllocator
     ~ProcessMemoryAllocator() override final;
 
     // interface to give access to the datafacades
-    storage::DataLayout &GetLayout() override final;
-    char *GetMemory() override final;
+    const storage::SharedDataIndex &GetIndex() override final;
 
   private:
+    storage::SharedDataIndex index;
     std::unique_ptr<char[]> internal_memory;
-    std::unique_ptr<storage::DataLayout> internal_layout;
 };
 
 } // namespace datafacade

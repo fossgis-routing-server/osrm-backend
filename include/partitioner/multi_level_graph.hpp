@@ -3,8 +3,8 @@
 
 #include "partitioner/multi_level_partition.hpp"
 
-#include "storage/io_fwd.hpp"
 #include "storage/shared_memory_ownership.hpp"
+#include "storage/tar_fwd.hpp"
 
 #include "util/static_graph.hpp"
 #include "util/vector_view.hpp"
@@ -24,14 +24,14 @@ template <typename EdgeDataT, storage::Ownership Ownership> class MultiLevelGrap
 namespace serialization
 {
 template <typename EdgeDataT, storage::Ownership Ownership>
-void read(storage::io::FileReader &reader,
-          MultiLevelGraph<EdgeDataT, Ownership> &graph,
-          std::uint32_t &connectivity_checksum);
+void read(storage::tar::FileReader &reader,
+          const std::string &name,
+          MultiLevelGraph<EdgeDataT, Ownership> &graph);
 
 template <typename EdgeDataT, storage::Ownership Ownership>
-void write(storage::io::FileWriter &writer,
-           const MultiLevelGraph<EdgeDataT, Ownership> &graph,
-           const std::uint32_t connectivity_checksum);
+void write(storage::tar::FileWriter &writer,
+           const std::string &name,
+           const MultiLevelGraph<EdgeDataT, Ownership> &graph);
 }
 
 template <typename EdgeDataT, storage::Ownership Ownership>
@@ -138,6 +138,14 @@ class MultiLevelGraph : public util::StaticGraph<EdgeDataT, Ownership>
     // We save the level as sentinel at the end
     LevelID GetNumberOfLevels() const { return node_to_edge_offset.back(); }
 
+    NodeID GetMaxBorderNodeID() const
+    {
+        auto num_levels = GetNumberOfLevels();
+        BOOST_ASSERT((node_to_edge_offset.size() - 1) % num_levels == 0);
+        auto max_border_node_id = (node_to_edge_offset.size() - 1) / num_levels - 1;
+        return max_border_node_id;
+    }
+
   private:
     template <typename ContainerT>
     auto GetHighestBorderLevel(const MultiLevelPartition &mlp, const ContainerT &edges) const
@@ -202,13 +210,13 @@ class MultiLevelGraph : public util::StaticGraph<EdgeDataT, Ownership>
     }
 
     friend void
-    serialization::read<EdgeDataT, Ownership>(storage::io::FileReader &reader,
-                                              MultiLevelGraph<EdgeDataT, Ownership> &graph,
-                                              std::uint32_t &connectivity_checksum);
+    serialization::read<EdgeDataT, Ownership>(storage::tar::FileReader &reader,
+                                              const std::string &name,
+                                              MultiLevelGraph<EdgeDataT, Ownership> &graph);
     friend void
-    serialization::write<EdgeDataT, Ownership>(storage::io::FileWriter &writer,
-                                               const MultiLevelGraph<EdgeDataT, Ownership> &graph,
-                                               const std::uint32_t connectivity_checksum);
+    serialization::write<EdgeDataT, Ownership>(storage::tar::FileWriter &writer,
+                                               const std::string &name,
+                                               const MultiLevelGraph<EdgeDataT, Ownership> &graph);
 
     Vector<EdgeOffset> node_to_edge_offset;
     std::uint32_t connectivity_checksum;

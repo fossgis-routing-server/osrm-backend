@@ -7,8 +7,6 @@
 #include "engine/api/table_parameters.hpp"
 #include "engine/api/tile_parameters.hpp"
 #include "engine/api/trip_parameters.hpp"
-#include "engine/data_watchdog.hpp"
-#include "engine/datafacade/contiguous_block_allocator.hpp"
 #include "engine/datafacade_provider.hpp"
 #include "engine/engine_config.hpp"
 #include "engine/plugins/match.hpp"
@@ -19,9 +17,7 @@
 #include "engine/plugins/viaroute.hpp"
 #include "engine/routing_algorithms.hpp"
 #include "engine/status.hpp"
-#include "util/exception.hpp"
-#include "util/exception_utils.hpp"
-#include "util/fingerprint.hpp"
+
 #include "util/json_container.hpp"
 
 #include <memory>
@@ -63,9 +59,16 @@ template <typename Algorithm> class Engine final : public EngineInterface
     {
         if (config.use_shared_memory)
         {
-            util::Log(logDEBUG) << "Using shared memory with algorithm "
-                                << routing_algorithms::name<Algorithm>();
-            facade_provider = std::make_unique<WatchingProvider<Algorithm>>();
+            util::Log(logDEBUG) << "Using shared memory with name \"" << config.dataset_name
+                                << "\" with algorithm " << routing_algorithms::name<Algorithm>();
+            facade_provider = std::make_unique<WatchingProvider<Algorithm>>(config.dataset_name);
+        }
+        else if (!config.memory_file.empty())
+        {
+            util::Log(logDEBUG) << "Using memory mapped filed at " << config.memory_file
+                                << " with algorithm " << routing_algorithms::name<Algorithm>();
+            facade_provider = std::make_unique<ExternalProvider<Algorithm>>(config.storage_config,
+                                                                            config.memory_file);
         }
         else
         {
@@ -116,8 +119,6 @@ template <typename Algorithm> class Engine final : public EngineInterface
         return tile_plugin.HandleRequest(GetAlgorithms(params), params, result);
     }
 
-    static bool CheckCompatibility(const EngineConfig &config);
-
   private:
     template <typename ParametersT> auto GetAlgorithms(const ParametersT &params) const
     {
@@ -133,74 +134,6 @@ template <typename Algorithm> class Engine final : public EngineInterface
     const plugins::MatchPlugin match_plugin;
     const plugins::TilePlugin tile_plugin;
 };
-
-template <>
-bool Engine<routing_algorithms::ch::Algorithm>::CheckCompatibility(const EngineConfig &config)
-{
-    if (config.use_shared_memory)
-    {
-        storage::SharedMonitor<storage::SharedDataTimestamp> barrier;
-        using mutex_type = typename decltype(barrier)::mutex_type;
-        boost::interprocess::scoped_lock<mutex_type> current_region_lock(barrier.get_mutex());
-
-        auto mem = storage::makeSharedMemory(barrier.data().region);
-        auto layout = reinterpret_cast<storage::DataLayout *>(mem->Ptr());
-        return layout->GetBlockSize(storage::DataLayout::CH_GRAPH_NODE_LIST) > 4 &&
-               layout->GetBlockSize(storage::DataLayout::CH_GRAPH_EDGE_LIST) > 4;
-    }
-    else
-    {
-        if (!boost::filesystem::exists(config.storage_config.GetPath(".osrm.hsgr")))
-            return false;
-        storage::io::FileReader in(config.storage_config.GetPath(".osrm.hsgr"),
-                                   storage::io::FileReader::VerifyFingerprint);
-
-        auto size = in.GetSize();
-        return size > 0;
-    }
-}
-
-template <>
-bool Engine<routing_algorithms::mld::Algorithm>::CheckCompatibility(const EngineConfig &config)
-{
-    if (config.use_shared_memory)
-    {
-        storage::SharedMonitor<storage::SharedDataTimestamp> barrier;
-        using mutex_type = typename decltype(barrier)::mutex_type;
-        boost::interprocess::scoped_lock<mutex_type> current_region_lock(barrier.get_mutex());
-
-        auto mem = storage::makeSharedMemory(barrier.data().region);
-        auto layout = reinterpret_cast<storage::DataLayout *>(mem->Ptr());
-        // checks that all the needed memory blocks are populated
-        // DataLayout::MLD_CELL_SOURCE_BOUNDARY and DataLayout::MLD_CELL_DESTINATION_BOUNDARY
-        // are not checked, because in situations where there are so few nodes in the graph that
-        // they all fit into one cell, they can be empty.
-        bool empty_data = layout->GetBlockSize(storage::DataLayout::MLD_LEVEL_DATA) > 0 &&
-                          layout->GetBlockSize(storage::DataLayout::MLD_PARTITION) > 0 &&
-                          layout->GetBlockSize(storage::DataLayout::MLD_CELL_TO_CHILDREN) > 0 &&
-                          layout->GetBlockSize(storage::DataLayout::MLD_CELLS) > 0 &&
-                          layout->GetBlockSize(storage::DataLayout::MLD_CELL_LEVEL_OFFSETS) > 0 &&
-                          layout->GetBlockSize(storage::DataLayout::MLD_GRAPH_NODE_LIST) > 0 &&
-                          layout->GetBlockSize(storage::DataLayout::MLD_GRAPH_EDGE_LIST) > 0 &&
-                          layout->GetBlockSize(storage::DataLayout::MLD_CELL_WEIGHTS_0) > 0 &&
-                          layout->GetBlockSize(storage::DataLayout::MLD_CELL_DURATIONS_0) > 0 &&
-                          layout->GetBlockSize(storage::DataLayout::MLD_GRAPH_NODE_TO_OFFSET) > 0;
-        return empty_data;
-    }
-    else
-    {
-        if (!boost::filesystem::exists(config.storage_config.GetPath(".osrm.partition")) ||
-            !boost::filesystem::exists(config.storage_config.GetPath(".osrm.cells")) ||
-            !boost::filesystem::exists(config.storage_config.GetPath(".osrm.mldgr")) ||
-            !boost::filesystem::exists(config.storage_config.GetPath(".osrm.cell_metrics")))
-            return false;
-        storage::io::FileReader in(config.storage_config.GetPath(".osrm.partition"),
-                                   storage::io::FileReader::VerifyFingerprint);
-
-        auto size = in.GetSize();
-        return size > 0;
-    }
-}
 }
 }
 

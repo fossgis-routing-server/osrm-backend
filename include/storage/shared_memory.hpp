@@ -47,6 +47,7 @@ class SharedMemory
 {
   public:
     void *Ptr() const { return region.get_address(); }
+    std::size_t Size() const { return region.get_size(); }
 
     SharedMemory(const SharedMemory &) = delete;
     SharedMemory &operator=(const SharedMemory &) = delete;
@@ -62,7 +63,7 @@ class SharedMemory
         {
             shm = boost::interprocess::xsi_shared_memory(boost::interprocess::open_only, key);
 
-            util::Log(logDEBUG) << "opening " << shm.get_shmid() << " from id " << id;
+            util::Log(logDEBUG) << "opening " << (int)shm.get_shmid() << " from id " << (int)id;
 
             region = boost::interprocess::mapped_region(shm, boost::interprocess::read_only);
         }
@@ -200,6 +201,7 @@ class SharedMemory
 
   public:
     void *Ptr() const { return region.get_address(); }
+    std::size_t Size() const { return region.get_size(); }
 
     SharedMemory(const boost::filesystem::path &lock_file, const int id, const uint64_t size = 0)
     {

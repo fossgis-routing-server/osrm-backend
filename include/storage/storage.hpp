@@ -28,6 +28,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef STORAGE_HPP
 #define STORAGE_HPP
 
+#include "storage/shared_data_index.hpp"
 #include "storage/shared_datatype.hpp"
 #include "storage/storage_config.hpp"
 
@@ -44,10 +45,12 @@ class Storage
   public:
     Storage(StorageConfig config);
 
-    int Run(int max_wait);
+    int Run(int max_wait, const std::string &name, bool only_metric);
 
-    void PopulateLayout(DataLayout &layout);
-    void PopulateData(const DataLayout &layout, char *memory_ptr);
+    void PopulateStaticLayout(DataLayout &layout);
+    void PopulateUpdatableLayout(DataLayout &layout);
+    void PopulateStaticData(const SharedDataIndex &index);
+    void PopulateUpdatableData(const SharedDataIndex &index);
 
   private:
     StorageConfig config;

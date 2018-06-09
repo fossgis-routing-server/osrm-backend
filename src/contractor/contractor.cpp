@@ -19,7 +19,6 @@
 #include "util/exception_utils.hpp"
 #include "util/exclude_flag.hpp"
 #include "util/filtered_graph.hpp"
-#include "util/graph_loader.hpp"
 #include "util/integer_range.hpp"
 #include "util/log.hpp"
 #include "util/static_graph.hpp"
@@ -64,11 +63,7 @@ int Contractor::Run()
 
     util::Log() << "Reading node weights.";
     std::vector<EdgeWeight> node_weights;
-    {
-        storage::io::FileReader reader(config.GetPath(".osrm.enw"),
-                                       storage::io::FileReader::VerifyFingerprint);
-        storage::serialization::read(reader, node_weights);
-    }
+    extractor::files::readEdgeBasedNodeWeights(config.GetPath(".osrm.enw"), node_weights);
     util::Log() << "Done reading node weights.";
 
     util::Log() << "Loading edge-expanded graph representation";
@@ -84,6 +79,7 @@ int Contractor::Run()
 
     TIMER_START(contraction);
 
+    std::string metric_name;
     std::vector<std::vector<bool>> node_filters;
     {
         extractor::EdgeBasedNodeDataContainer node_data;
@@ -91,13 +87,11 @@ int Contractor::Run()
 
         extractor::ProfileProperties properties;
         extractor::files::readProfileProperties(config.GetPath(".osrm.properties"), properties);
+        metric_name = properties.GetWeightName();
 
         node_filters =
             util::excludeFlagsToNodeFilter(number_of_edge_based_nodes, node_data, properties);
     }
-
-    RangebasedCRC32 crc32_calculator;
-    const unsigned checksum = crc32_calculator(edge_based_edge_list);
 
     QueryGraph query_graph;
     std::vector<std::vector<bool>> edge_filters;
@@ -110,8 +104,10 @@ int Contractor::Run()
     util::Log() << "Contracted graph has " << query_graph.GetNumberOfEdges() << " edges.";
     util::Log() << "Contraction took " << TIMER_SEC(contraction) << " sec";
 
-    files::writeGraph(
-        config.GetPath(".osrm.hsgr"), checksum, query_graph, edge_filters, connectivity_checksum);
+    std::unordered_map<std::string, ContractedMetric> metrics = {
+        {metric_name, {std::move(query_graph), std::move(edge_filters)}}};
+
+    files::writeGraph(config.GetPath(".osrm.hsgr"), metrics, connectivity_checksum);
 
     TIMER_STOP(preparing);
 
