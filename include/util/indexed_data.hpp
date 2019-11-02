@@ -16,6 +16,9 @@
 #include <string>
 #include <type_traits>
 
+// workaround for <linux/fs.h> defining BLOCK_SIZE
+#undef BLOCK_SIZE
+
 namespace osrm
 {
 namespace util
