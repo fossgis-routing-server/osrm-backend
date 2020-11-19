@@ -63,15 +63,34 @@ namespace api
  */
 struct BaseParameters
 {
+
+    enum class SnappingType
+    {
+        Default,
+        Any
+    };
+
+    enum class OutputFormatType
+    {
+        JSON,
+        FLATBUFFERS
+    };
+
     std::vector<util::Coordinate> coordinates;
     std::vector<boost::optional<Hint>> hints;
     std::vector<boost::optional<double>> radiuses;
     std::vector<boost::optional<Bearing>> bearings;
     std::vector<boost::optional<Approach>> approaches;
     std::vector<std::string> exclude;
+    boost::optional<OutputFormatType> format = OutputFormatType::JSON;
 
     // Adds hints to response which can be included in subsequent requests, see `hints` above.
     bool generate_hints = true;
+
+    // Remove waypoints array from the response.
+    bool skip_waypoints = false;
+
+    SnappingType snapping = SnappingType::Default;
 
     BaseParameters(const std::vector<util::Coordinate> coordinates_ = {},
                    const std::vector<boost::optional<Hint>> hints_ = {},
@@ -79,9 +98,11 @@ struct BaseParameters
                    std::vector<boost::optional<Bearing>> bearings_ = {},
                    std::vector<boost::optional<Approach>> approaches_ = {},
                    bool generate_hints_ = true,
-                   std::vector<std::string> exclude = {})
+                   std::vector<std::string> exclude = {},
+                   const SnappingType snapping_ = SnappingType::Default)
         : coordinates(coordinates_), hints(hints_), radiuses(radiuses_), bearings(bearings_),
-          approaches(approaches_), exclude(std::move(exclude)), generate_hints(generate_hints_)
+          approaches(approaches_), exclude(std::move(exclude)), generate_hints(generate_hints_),
+          snapping(snapping_)
     {
     }
 
