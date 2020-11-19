@@ -138,7 +138,7 @@ Given an OpenStreetMap way, the `process_way` function will either return nothin
 Argument | Description
 ---------|-------------------------------------------------------
 profile  | The configuration table you returned in `setup`.
-node     | The input way to process (read-only).
+way      | The input way to process (read-only).
 result   | The output that you will modify.
 relations| Storage of relations to access relations, where `way` is a member.
 
@@ -199,7 +199,7 @@ source.lon         | Read        | Float   | Co-ordinates of segment start
 source.lat         | Read        | Float   |  ""
 target.lon         | Read        | Float   | Co-ordinates of segment end
 target.lat         | Read        | Float   |  ""
-target.distance    | Read        | Float   | Length of segment
+distance           | Read        | Float   | Length of segment
 weight             | Read/write  | Float   | Routing weight for this segment
 duration           | Read/write  | Float   | Duration for this segment
 
