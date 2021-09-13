@@ -1,6 +1,6 @@
 {
   "name": "osrm",
-  "version": "5.24.0-unreleased",
+  "version": "5.26.0-unreleased",
   "private": false,
   "description": "The Open Source Routing Machine is a high performance routing engine written in C++14 designed to run on OpenStreetMap data.",
   "dependencies": {
@@ -68,8 +68,8 @@
   "binary": {
     "module_name": "node_osrm",
     "module_path": "./lib/binding/",
-    "host": "https://mapbox-node-binary.s3.amazonaws.com",
-    "remote_path": "./{name}/v{version}/{configuration}/",
-    "package_name": "{node_abi}-{platform}-{arch}.tar.gz"
+    "host": "https://github.com",
+    "remote_path": "./Project-OSRM/osrm-backend/releases/download/v{version}/",
+    "package_name": "{module_name}-v{version}-{node_abi}-{platform}-{arch}-{configuration}.tar.gz"
   }
 }

@@ -1,5 +1,18 @@
 # Unreleased
+  - Changes from 5.25.0
+    - API:
+      - FIXED: Allow for special characters in the profile/method as part of the HTTP URL. [#6090](https://github.com/Project-OSRM/osrm-backend/pull/6090)
+      - FIXED: Set osrm-routed to immediately close bad connections [#6112](https://github.com/Project-OSRM/osrm-backend/pull/6112)
+    - Build:
+      - CHANGED: Replace Travis with Github Actions for CI builds [#6071](https://github.com/Project-OSRM/osrm-backend/pull/6071)
+      - FIXED: Fixed Boost link flags in pkg-config file. [#6083](https://github.com/Project-OSRM/osrm-backend/pull/6083)
+    - Routing:
+      - FIXED: Fix generation of inefficient MLD partitions [#6084](https://github.com/Project-OSRM/osrm-backend/pull/6084)
+
+# 5.25.0
   - Changes from 5.24.0
+    - Build:
+      - CHANGED: Node binaries now use Github Releases for hosting [#6030](https://github.com/Project-OSRM/osrm-backend/pull/6030)
     - Misc:
       - FIXED: Upgrade to @mapbox/node-pre-gyp fix various bugs with Node 12/14 [#5991](https://github.com/Project-OSRM/osrm-backend/pull/5991)
       - FIXED: `valid` type in documentation examples [#5990](https://github.com/Project-OSRM/osrm-backend/issues/5990)
@@ -113,7 +126,7 @@
 ](https://github.com/Project-OSRM/osrm-backend/pull/5076/)
       - CHANGED: Foot profile now blacklists barriers instead of whitelisting them [#5077
 ](https://github.com/Project-OSRM/osrm-backend/pull/5077/)
-      - CHANGED: Support maxlength and maxweight in car profile [#5101](https://github.com/Project-OSRM/osrm-backend/pull/5101]
+      - CHANGED: Support maxlength and maxweight in car profile [#5101](https://github.com/Project-OSRM/osrm-backend/pull/5101)
     - Bugfixes:
       - FIXED: collapsing of ExitRoundabout instructions [#5114](https://github.com/Project-OSRM/osrm-backend/issues/5114)
     - Misc:
