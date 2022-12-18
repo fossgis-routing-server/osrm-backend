@@ -8,6 +8,7 @@
 #include "extractor/packed_osm_ids.hpp"
 #include "extractor/scripting_environment.hpp"
 
+#include "traffic_signals.hpp"
 #include "util/coordinate.hpp"
 #include "util/node_based_graph.hpp"
 
@@ -33,18 +34,22 @@ namespace extractor
 class NodeBasedGraphFactory
 {
   public:
-    // The node-based graph factory loads the *.osrm file and transforms the data within into the
+    // The node-based graph factory transforms the graph data into the
     // node-based graph to represent the OSM network. This includes geometry compression, annotation
     // data optimisation and many other aspects. After this step, the edge-based graph factory can
     // turn the graph into the routing graph to be used with the navigation algorithms.
-    NodeBasedGraphFactory(const boost::filesystem::path &input_file,
-                          ScriptingEnvironment &scripting_environment,
+    NodeBasedGraphFactory(ScriptingEnvironment &scripting_environment,
                           std::vector<TurnRestriction> &turn_restrictions,
-                          std::vector<UnresolvedManeuverOverride> &maneuver_overrides);
+                          std::vector<UnresolvedManeuverOverride> &maneuver_overrides,
+                          const TrafficSignals &traffic_signals,
+                          std::unordered_set<NodeID> &&barriers,
+                          std::vector<util::Coordinate> &&coordinates,
+                          extractor::PackedOSMIDs &&osm_node_ids,
+                          const std::vector<NodeBasedEdge> &edge_list,
+                          std::vector<NodeBasedEdgeAnnotation> &&annotation_data);
 
     auto const &GetGraph() const { return compressed_output_graph; }
     auto const &GetBarriers() const { return barriers; }
-    auto const &GetTrafficSignals() const { return traffic_signals; }
     auto const &GetCompressedEdges() const { return compressed_edge_container; }
     auto const &GetCoordinates() const { return coordinates; }
     auto const &GetAnnotationData() const { return annotation_data; }
@@ -59,16 +64,16 @@ class NodeBasedGraphFactory
     void ReleaseOsmNodes();
 
   private:
-    // Get the information from the *.osrm file (direct product of the extractor callback/extraction
-    // containers) and prepare the graph creation process
-    void LoadDataFromFile(const boost::filesystem::path &input_file);
+    // Build and validate compressed output graph
+    void BuildCompressedOutputGraph(const std::vector<NodeBasedEdge> &edge_list);
 
     // Compress the node-based graph into a compact representation of itself. This removes storing a
     // single edge for every part of the geometry and might also combine meta-data for multiple
     // edges into a single representative form
     void Compress(ScriptingEnvironment &scripting_environment,
                   std::vector<TurnRestriction> &turn_restrictions,
-                  std::vector<UnresolvedManeuverOverride> &maneuver_overrides);
+                  std::vector<UnresolvedManeuverOverride> &maneuver_overrides,
+                  const TrafficSignals &traffic_signals);
 
     // Most ways are bidirectional, making the geometry in forward and backward direction the same,
     // except for reversal. We make use of this fact by keeping only one representation of the
@@ -89,7 +94,6 @@ class NodeBasedGraphFactory
 
     // General Information about the graph, not used outside of extractor
     std::unordered_set<NodeID> barriers;
-    std::unordered_set<NodeID> traffic_signals;
 
     std::vector<util::Coordinate> coordinates;
 

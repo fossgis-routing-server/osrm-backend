@@ -5,6 +5,7 @@ api_version = 4
 Set = require('lib/set')
 Sequence = require('lib/sequence')
 Handlers = require("lib/way_handlers")
+TrafficSignal = require("lib/traffic_signal")
 find_access_tag = require("lib/access").find_access_tag
 limit = require("lib/maxspeed").limit
 Measure = require("lib/measure")
@@ -132,7 +133,7 @@ function setup()
       road = default_speed,
       service = default_speed,
       track = 12,
-      path = 12
+      path = 13
     },
 
     pedestrian_speeds = {
@@ -173,21 +174,25 @@ function setup()
 
     surface_speeds = {
       asphalt = default_speed,
+      chipseal = default_speed,
+      concrete = default_speed,
+      concrete_lanes = default_speed,
+      wood = 10,
       ["cobblestone:flattened"] = 10,
       paving_stones = 10,
       compacted = 10,
-      cobblestone = 6,
+      cobblestone = 7,
       unpaved = 6,
-      fine_gravel = 6,
+      fine_gravel = 10,
       gravel = 6,
       pebblestone = 6,
-      ground = 6,
-      dirt = 6,
+      ground = 10,
+      dirt = 8,
       earth = 6,
       grass = 6,
       mud = 3,
       sand = 3,
-      sett = 10
+      sett = 9
     },
 
     classes = Sequence {
@@ -235,10 +240,7 @@ function process_node(profile, node, result)
   end
 
   -- check if node is a traffic light
-  local tag = node:get_value_by_key("highway")
-  if tag and "traffic_signals" == tag then
-    result.traffic_lights = true
-  end
+  result.traffic_lights = TrafficSignal.get_value(node)
 end
 
 function handle_bicycle_tags(profile,way,result,data)
@@ -542,21 +544,6 @@ function safety_handler(profile,way,result,data)
     end
     if result.duration > 0 then
       result.weight = result.duration / forward_penalty
-    end
-
-    if data.highway == "bicycle" then
-      safety_bonus = safety_bonus + 0.2
-      if result.forward_speed > 0 then
-        -- convert from km/h to m/s
-        result.forward_rate = result.forward_speed / 3.6 * safety_bonus
-      end
-      if result.backward_speed > 0 then
-        -- convert from km/h to m/s
-        result.backward_rate = result.backward_speed / 3.6 * safety_bonus
-      end
-      if result.duration > 0 then
-        result.weight = result.duration / safety_bonus
-      end
     end
   end
 end

@@ -1,8 +1,3 @@
-# mason #
-#########
-/.mason
-/mason_packages
-
 # pre compiled dependencies #
 #############################
 osrm-deps
@@ -67,6 +62,7 @@ Thumbs.db
 /.vs*
 /*.local.bat
 /CMakeSettings.json
+/.cache
 
 # Jetbrains related files #
 ###########################

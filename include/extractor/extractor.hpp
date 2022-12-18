@@ -43,6 +43,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "util/guidance/turn_lanes.hpp"
 
 #include "restriction_graph.hpp"
+#include "traffic_signals.hpp"
 #include "util/typedefs.hpp"
 
 namespace osrm
@@ -60,12 +61,24 @@ class Extractor
     int run(ScriptingEnvironment &scripting_environment);
 
   private:
+    struct ParsedOSMData
+    {
+        LaneDescriptionMap turn_lane_map;
+        std::vector<TurnRestriction> turn_restrictions;
+        std::vector<UnresolvedManeuverOverride> unresolved_maneuver_overrides;
+        TrafficSignals traffic_signals;
+        std::unordered_set<NodeID> barriers;
+        std::vector<util::Coordinate> osm_coordinates;
+        extractor::PackedOSMIDs osm_node_ids;
+        std::vector<NodeBasedEdge> edge_list;
+        std::vector<NodeBasedEdgeAnnotation> annotation_data;
+    };
+
+  private:
     ExtractorConfig config;
 
-    std::tuple<LaneDescriptionMap,
-               std::vector<TurnRestriction>,
-               std::vector<UnresolvedManeuverOverride>>
-    ParseOSMData(ScriptingEnvironment &scripting_environment, const unsigned number_of_threads);
+    ParsedOSMData ParseOSMData(ScriptingEnvironment &scripting_environment,
+                               const unsigned number_of_threads);
 
     EdgeID BuildEdgeExpandedGraph(
         // input data
@@ -73,7 +86,7 @@ class Extractor
         const std::vector<util::Coordinate> &coordinates,
         const CompressedEdgeContainer &compressed_edge_container,
         const std::unordered_set<NodeID> &barrier_nodes,
-        const std::unordered_set<NodeID> &traffic_lights,
+        const TrafficSignals &traffic_signals,
         const RestrictionGraph &restriction_graph,
         const std::unordered_set<EdgeID> &segregated_edges,
         const NameTable &name_table,
