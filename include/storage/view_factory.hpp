@@ -36,9 +36,7 @@
 #include "util/vector_view.hpp"
 
 #include "util/filtered_graph.hpp"
-namespace osrm
-{
-namespace storage
+namespace osrm::storage
 {
 
 template <typename T>
@@ -204,7 +202,7 @@ inline auto make_search_tree_view(const SharedDataIndex &index, const std::strin
 
     const char *path = index.template GetBlockPtr<char>(name + "/file_index_path");
 
-    if (!boost::filesystem::exists(boost::filesystem::path{path}))
+    if (!std::filesystem::exists(std::filesystem::path{path}))
     {
         throw util::exception("Could not load " + std::string(path) + "Does the leaf file exist?" +
                               SOURCE_REF);
@@ -243,9 +241,9 @@ inline auto make_contracted_metric_view(const SharedDataIndex &index, const std:
 
     std::vector<util::vector_view<bool>> edge_filter;
     index.List(name + "/exclude",
-               boost::make_function_output_iterator([&](const auto &filter_name) {
-                   edge_filter.push_back(make_vector_view<bool>(index, filter_name));
-               }));
+               boost::make_function_output_iterator(
+                   [&](const auto &filter_name)
+                   { edge_filter.push_back(make_vector_view<bool>(index, filter_name)); }));
 
     return contractor::ContractedMetricView{{node_list, edge_list}, std::move(edge_filter)};
 }
@@ -263,7 +261,7 @@ inline auto make_partition_view(const SharedDataIndex &index, const std::string 
 
 inline auto make_timestamp_view(const SharedDataIndex &index, const std::string &name)
 {
-    return util::StringView(index.GetBlockPtr<char>(name), index.GetBlockEntries(name));
+    return std::string_view(index.GetBlockPtr<char>(name), index.GetBlockEntries(name));
 }
 
 inline auto make_cell_storage_view(const SharedDataIndex &index, const std::string &name)
@@ -364,7 +362,6 @@ inline auto make_filtered_graph_view(const SharedDataIndex &index,
 
     return util::FilteredGraphView<contractor::QueryGraphView>({node_list, edge_list}, edge_filter);
 }
-} // namespace storage
-} // namespace osrm
+} // namespace osrm::storage
 
 #endif

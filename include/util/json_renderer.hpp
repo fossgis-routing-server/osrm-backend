@@ -8,19 +8,16 @@
 
 #include "osrm/json_container.hpp"
 
-#include <algorithm>
 #include <iterator>
 #include <ostream>
 #include <string>
 #include <vector>
 
+#include <boost/assert.hpp>
+
 #include <fmt/compile.h>
 
-namespace osrm
-{
-namespace util
-{
-namespace json
+namespace osrm::util::json
 {
 
 template <typename Out> struct Renderer
@@ -51,17 +48,12 @@ template <typename Out> struct Renderer
 
     void operator()(const Number &number)
     {
+        // we don't want to print NaN or Infinity
+        BOOST_ASSERT(std::isfinite(number.value));
         // `fmt::memory_buffer` stores first 500 bytes in the object itself(i.e. on stack in this
         // case) and then grows using heap if needed
         fmt::memory_buffer buffer;
-        fmt::format_to(std::back_inserter(buffer), FMT_COMPILE("{}"), number.value);
-
-        // Truncate to 10 decimal places
-        size_t decimalpos = std::find(buffer.begin(), buffer.end(), '.') - buffer.begin();
-        if (buffer.size() > (decimalpos + 10))
-        {
-            buffer.resize(decimalpos + 10);
-        }
+        fmt::format_to(std::back_inserter(buffer), FMT_COMPILE("{:.10g}"), number.value);
 
         write(buffer.data(), buffer.size());
     }
@@ -74,7 +66,7 @@ template <typename Out> struct Renderer
             write('\"');
             write(it->first);
             write<>("\":");
-            mapbox::util::apply_visitor(Renderer(out), it->second);
+            std::visit(Renderer(out), it->second);
             if (++it != end)
             {
                 write(',');
@@ -88,7 +80,7 @@ template <typename Out> struct Renderer
         write('[');
         for (auto it = array.values.cbegin(), end = array.values.cend(); it != end;)
         {
-            mapbox::util::apply_visitor(Renderer(out), *it);
+            std::visit(Renderer(out), *it);
             if (++it != end)
             {
                 write(',');
@@ -104,7 +96,7 @@ template <typename Out> struct Renderer
     void operator()(const Null &) { write<>("null"); }
 
   private:
-    void write(const std::string &str);
+    void write(std::string_view str);
     void write(const char *str, size_t size);
     void write(char ch);
 
@@ -117,7 +109,7 @@ template <typename Out> struct Renderer
     Out &out;
 };
 
-template <> void Renderer<std::vector<char>>::write(const std::string &str)
+template <> void Renderer<std::vector<char>>::write(std::string_view str)
 {
     out.insert(out.end(), str.begin(), str.end());
 }
@@ -129,7 +121,7 @@ template <> void Renderer<std::vector<char>>::write(const char *str, size_t size
 
 template <> void Renderer<std::vector<char>>::write(char ch) { out.push_back(ch); }
 
-template <> void Renderer<std::ostream>::write(const std::string &str) { out << str; }
+template <> void Renderer<std::ostream>::write(std::string_view str) { out << str; }
 
 template <> void Renderer<std::ostream>::write(const char *str, size_t size)
 {
@@ -138,7 +130,7 @@ template <> void Renderer<std::ostream>::write(const char *str, size_t size)
 
 template <> void Renderer<std::ostream>::write(char ch) { out << ch; }
 
-template <> void Renderer<std::string>::write(const std::string &str) { out += str; }
+template <> void Renderer<std::string>::write(std::string_view str) { out += str; }
 
 template <> void Renderer<std::string>::write(const char *str, size_t size)
 {
@@ -165,8 +157,6 @@ inline void render(std::vector<char> &out, const Object &object)
     renderer(object);
 }
 
-} // namespace json
-} // namespace util
-} // namespace osrm
+} // namespace osrm::util::json
 
 #endif // JSON_RENDERER_HPP

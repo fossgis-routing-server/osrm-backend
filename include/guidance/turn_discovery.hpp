@@ -2,6 +2,7 @@
 #define OSRM_GUIDANCE_TURN_DISCOVERY_HPP_
 
 #include "extractor/node_restriction_map.hpp"
+#include "extractor/obstacles.hpp"
 #include "guidance/intersection.hpp"
 #include "guidance/turn_lane_data.hpp"
 #include "util/typedefs.hpp"
@@ -20,10 +21,7 @@ namespace extractor
 class CompressedEdgeContainer;
 }
 
-namespace guidance
-{
-
-namespace lanes
+namespace guidance::lanes
 {
 
 // OSRM processes edges by looking at a via_edge, coming into an intersection. For turn lanes, we
@@ -38,15 +36,14 @@ bool findPreviousIntersection(
     const std::vector<util::Coordinate> &node_coordinates,
     const extractor::CompressedEdgeContainer &compressed_geometries,
     const extractor::RestrictionMap &node_restriction_map,
-    const std::unordered_set<NodeID> &barrier_nodes,
+    const extractor::ObstacleMap &obstacle_nodes,
     const extractor::TurnLanesIndexedArray &turn_lanes_data,
     // output parameters, will be in an arbitrary state on failure
     NodeID &result_node,
     EdgeID &result_via_edge,
     extractor::intersection::IntersectionView &result_intersection);
 
-} // namespace lanes
-} // namespace guidance
+} // namespace guidance::lanes
 } // namespace osrm
 
 #endif /*OSRM_GUIDANCE_TURN_DISCOVERY_HPP_*/

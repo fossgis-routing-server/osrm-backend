@@ -11,9 +11,7 @@
 #include "engine/routing_algorithms/shortest_path.hpp"
 #include "engine/routing_algorithms/tile_turns.hpp"
 
-namespace osrm
-{
-namespace engine
+namespace osrm::engine
 {
 
 class RoutingAlgorithmsInterface
@@ -27,7 +25,7 @@ class RoutingAlgorithmsInterface
 
     virtual InternalRouteResult
     ShortestPathSearch(const std::vector<PhantomNodeCandidates> &waypoint_candidates,
-                       const boost::optional<bool> continue_straight_at_waypoint) const = 0;
+                       const std::optional<bool> continue_straight_at_waypoint) const = 0;
 
     virtual InternalRouteResult
     DirectShortestPathSearch(const PhantomEndpointCandidates &endpoint_candidates) const = 0;
@@ -42,7 +40,7 @@ class RoutingAlgorithmsInterface
     MapMatching(const routing_algorithms::CandidateLists &candidates_list,
                 const std::vector<util::Coordinate> &trace_coordinates,
                 const std::vector<unsigned> &trace_timestamps,
-                const std::vector<boost::optional<double>> &trace_gps_precision,
+                const std::vector<std::optional<double>> &trace_gps_precision,
                 const bool allow_splitting) const = 0;
 
     virtual std::vector<routing_algorithms::TurnData>
@@ -80,7 +78,7 @@ template <typename Algorithm> class RoutingAlgorithms final : public RoutingAlgo
 
     InternalRouteResult ShortestPathSearch(
         const std::vector<PhantomNodeCandidates> &waypoint_candidates,
-        const boost::optional<bool> continue_straight_at_waypoint) const final override;
+        const std::optional<bool> continue_straight_at_waypoint) const final override;
 
     InternalRouteResult DirectShortestPathSearch(
         const PhantomEndpointCandidates &endpoint_candidates) const final override;
@@ -95,7 +93,7 @@ template <typename Algorithm> class RoutingAlgorithms final : public RoutingAlgo
     MapMatching(const routing_algorithms::CandidateLists &candidates_list,
                 const std::vector<util::Coordinate> &trace_coordinates,
                 const std::vector<unsigned> &trace_timestamps,
-                const std::vector<boost::optional<double>> &trace_gps_precision,
+                const std::vector<std::optional<double>> &trace_gps_precision,
                 const bool allow_splitting) const final override;
 
     std::vector<routing_algorithms::TurnData>
@@ -162,7 +160,7 @@ InternalManyRoutesResult RoutingAlgorithms<Algorithm>::AlternativePathSearch(
 template <typename Algorithm>
 InternalRouteResult RoutingAlgorithms<Algorithm>::ShortestPathSearch(
     const std::vector<PhantomNodeCandidates> &waypoint_candidates,
-    const boost::optional<bool> continue_straight_at_waypoint) const
+    const std::optional<bool> continue_straight_at_waypoint) const
 {
     return routing_algorithms::shortestPathSearch(
         heaps, *facade, waypoint_candidates, continue_straight_at_waypoint);
@@ -180,7 +178,7 @@ inline routing_algorithms::SubMatchingList RoutingAlgorithms<Algorithm>::MapMatc
     const routing_algorithms::CandidateLists &candidates_list,
     const std::vector<util::Coordinate> &trace_coordinates,
     const std::vector<unsigned> &trace_timestamps,
-    const std::vector<boost::optional<double>> &trace_gps_precision,
+    const std::vector<std::optional<double>> &trace_gps_precision,
     const bool allow_splitting) const
 {
     return routing_algorithms::mapMatching(heaps,
@@ -232,7 +230,6 @@ inline std::vector<routing_algorithms::TurnData> RoutingAlgorithms<Algorithm>::G
     return routing_algorithms::getTileTurns(*facade, edges, sorted_edge_indexes);
 }
 
-} // namespace engine
-} // namespace osrm
+} // namespace osrm::engine
 
 #endif

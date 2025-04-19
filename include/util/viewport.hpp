@@ -4,18 +4,11 @@
 #include "util/coordinate.hpp"
 #include "util/web_mercator.hpp"
 
-#include <boost/assert.hpp>
-
 #include <cmath>
-#include <tuple>
 
 // Port of https://github.com/mapbox/geo-viewport
 
-namespace osrm
-{
-namespace util
-{
-namespace viewport
+namespace osrm::util::viewport
 {
 
 namespace detail
@@ -44,8 +37,6 @@ inline unsigned getFittedZoom(util::Coordinate south_west, util::Coordinate nort
     else
         return detail::MIN_ZOOM;
 }
-} // namespace viewport
-} // namespace util
-} // namespace osrm
+} // namespace osrm::util::viewport
 
 #endif

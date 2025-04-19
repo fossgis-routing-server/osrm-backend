@@ -8,13 +8,7 @@
 #include "util/log.hpp"
 #include "util/mmap_file.hpp"
 
-#include <boost/assert.hpp>
-
-namespace osrm
-{
-namespace engine
-{
-namespace datafacade
+namespace osrm::engine::datafacade
 {
 
 MMapMemoryAllocator::MMapMemoryAllocator(const storage::StorageConfig &config)
@@ -48,7 +42,7 @@ MMapMemoryAllocator::MMapMemoryAllocator(const storage::StorageConfig &config)
 
     for (const auto &file : files)
     {
-        if (boost::filesystem::exists(file.second))
+        if (std::filesystem::exists(file.second))
         {
             std::unique_ptr<storage::BaseDataLayout> layout =
                 std::make_unique<storage::TarDataLayout>();
@@ -67,6 +61,4 @@ MMapMemoryAllocator::~MMapMemoryAllocator() {}
 
 const storage::SharedDataIndex &MMapMemoryAllocator::GetIndex() { return index; }
 
-} // namespace datafacade
-} // namespace engine
-} // namespace osrm
+} // namespace osrm::engine::datafacade

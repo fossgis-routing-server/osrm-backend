@@ -15,13 +15,7 @@
 #include "storage/io.hpp"
 #include "storage/serialization.hpp"
 
-#include <boost/assert.hpp>
-
-namespace osrm
-{
-namespace extractor
-{
-namespace serialization
+namespace osrm::extractor::serialization
 {
 
 // read/write for bearing data
@@ -219,11 +213,8 @@ inline void read(storage::tar::FileReader &reader,
                  const std::string &name,
                  detail::NameTableImpl<Ownership> &name_table)
 {
-    std::string buffer;
     util::serialization::read(reader, name, name_table.indexed_data);
 }
-} // namespace serialization
-} // namespace extractor
-} // namespace osrm
+} // namespace osrm::extractor::serialization
 
 #endif

@@ -7,9 +7,7 @@
 #include <mutex>
 #include <string>
 
-namespace osrm
-{
-namespace util
+namespace osrm::util
 {
 
 namespace
@@ -75,7 +73,8 @@ void Log::Init()
     {
         const bool is_terminal = IsStdoutATTY();
 
-        auto format = [is_terminal](const char *level, const char *color) {
+        auto format = [is_terminal](const char *level, const char *color)
+        {
             const auto timestamp = std::chrono::system_clock::now();
             return fmt::format("{}[{:%FT%H:%M:}{:%S}] [{}] ",
                                is_terminal ? color : "",
@@ -163,5 +162,4 @@ UnbufferedLog::UnbufferedLog(LogLevel level_)
 {
     stream.flags(std::ios_base::unitbuf);
 }
-} // namespace util
-} // namespace osrm
+} // namespace osrm::util

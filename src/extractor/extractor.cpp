@@ -16,7 +16,6 @@
 #include "extractor/restriction_graph.hpp"
 #include "extractor/restriction_parser.hpp"
 #include "extractor/scripting_environment.hpp"
-#include "extractor/tarjan_scc.hpp"
 #include "extractor/turn_path_filter.hpp"
 #include "extractor/way_restriction_map.hpp"
 
@@ -31,6 +30,7 @@
 #include "util/log.hpp"
 #include "util/static_graph.hpp"
 #include "util/static_rtree.hpp"
+#include "util/tarjan_scc.hpp"
 #include "util/timing_util.hpp"
 
 // Keep debug include to make sure the debug header is in sync with types.
@@ -44,27 +44,16 @@
 #include <osmium/thread/pool.hpp>
 #include <osmium/visitor.hpp>
 #include <tbb/global_control.h>
-#if TBB_VERSION_MAJOR == 2020
-#include <tbb/pipeline.h>
-#else
 #include <tbb/parallel_pipeline.h>
-#endif
 
 #include <algorithm>
-#include <atomic>
-#include <bitset>
-#include <chrono>
-#include <iostream>
 #include <memory>
 #include <thread>
 #include <tuple>
 #include <type_traits>
-#include <unordered_map>
 #include <vector>
 
-namespace osrm
-{
-namespace extractor
+namespace osrm::extractor
 {
 
 namespace
@@ -187,7 +176,7 @@ std::vector<CompressedNodeBasedGraphEdge> toEdgeList(const util::NodeBasedDynami
  * That includes:
  *  - extracting turn restrictions
  *  - splitting ways into (directional!) edge segments
- *  - checking if nodes are barriers or traffic signal
+ *  - checking if nodes are obstacles, that must be kept
  *  - discarding all tag information: All relevant type information for nodes/ways
  *    is extracted at this point.
  *
@@ -229,8 +218,6 @@ int Extractor::run(ScriptingEnvironment &scripting_environment)
     NodeBasedGraphFactory node_based_graph_factory(scripting_environment,
                                                    parsed_osm_data.turn_restrictions,
                                                    parsed_osm_data.unresolved_maneuver_overrides,
-                                                   parsed_osm_data.traffic_signals,
-                                                   std::move(parsed_osm_data.barriers),
                                                    std::move(parsed_osm_data.osm_coordinates),
                                                    std::move(parsed_osm_data.osm_node_ids),
                                                    parsed_osm_data.edge_list,
@@ -268,7 +255,6 @@ int Extractor::run(ScriptingEnvironment &scripting_environment)
 
     node_based_graph_factory.GetCompressedEdges().PrintStatistics();
 
-    const auto &barrier_nodes = node_based_graph_factory.GetBarriers();
     // stealing the annotation data from the node-based graph
     edge_based_nodes_container =
         EdgeBasedNodeDataContainer({}, std::move(node_based_graph_factory.GetAnnotationData()));
@@ -285,8 +271,6 @@ int Extractor::run(ScriptingEnvironment &scripting_environment)
         BuildEdgeExpandedGraph(node_based_graph,
                                coordinates,
                                node_based_graph_factory.GetCompressedEdges(),
-                               barrier_nodes,
-                               parsed_osm_data.traffic_signals,
                                restriction_graph,
                                segregated_edges,
                                name_table,
@@ -305,7 +289,6 @@ int Extractor::run(ScriptingEnvironment &scripting_environment)
                          edge_based_nodes_container,
                          coordinates,
                          node_based_graph_factory.GetCompressedEdges(),
-                         barrier_nodes,
                          restriction_graph,
                          name_table,
                          std::move(parsed_osm_data.turn_lane_map),
@@ -360,7 +343,7 @@ int Extractor::run(ScriptingEnvironment &scripting_environment)
     util::Log() << "Expansion: " << nodes_per_second << " nodes/sec and " << edges_per_second
                 << " edges/sec";
     util::Log() << "To prepare the data for routing, run: "
-                << "./osrm-contract " << config.base_path;
+                << "./osrm-partition " << config.base_path;
 
     return 0;
 }
@@ -448,14 +431,12 @@ Extractor::ParsedOSMData Extractor::ParseOSMData(ScriptingEnvironment &scripting
 
     ExtractionRelationContainer relations;
 
-    const auto buffer_reader = [](osmium::io::Reader &reader) {
-#if TBB_VERSION_MAJOR == 2020
-        return tbb::filter_t<void, SharedBuffer>(
-            tbb::filter::serial_in_order, [&reader](tbb::flow_control &fc) {
-#else
+    const auto buffer_reader = [](osmium::io::Reader &reader)
+    {
         return tbb::filter<void, SharedBuffer>(
-            tbb::filter_mode::serial_in_order, [&reader](tbb::flow_control &fc) {
-#endif
+            tbb::filter_mode::serial_in_order,
+            [&reader](tbb::flow_control &fc)
+            {
                 if (auto buffer = reader.read())
                 {
                     return std::make_shared<osmium::memory::Buffer>(std::move(buffer));
@@ -476,27 +457,20 @@ Extractor::ParsedOSMData Extractor::ParseOSMData(ScriptingEnvironment &scripting
     osmium_index_type location_cache;
     osmium_location_handler_type location_handler(location_cache);
 
-#if TBB_VERSION_MAJOR == 2020
-    tbb::filter_t<SharedBuffer, SharedBuffer> location_cacher(
-        tbb::filter::serial_in_order, [&location_handler](SharedBuffer buffer) {
-#else
     tbb::filter<SharedBuffer, SharedBuffer> location_cacher(
-        tbb::filter_mode::serial_in_order, [&location_handler](SharedBuffer buffer) {
-#endif
+        tbb::filter_mode::serial_in_order,
+        [&location_handler](SharedBuffer buffer)
+        {
             osmium::apply(buffer->begin(), buffer->end(), location_handler);
             return buffer;
         });
 
     // OSM elements Lua parser
-#if TBB_VERSION_MAJOR == 2020
-    tbb::filter_t<SharedBuffer, ParsedBuffer> buffer_transformer(
-        tbb::filter::parallel,
-#else
     tbb::filter<SharedBuffer, ParsedBuffer> buffer_transformer(
         tbb::filter_mode::parallel,
-#endif
         // NOLINTNEXTLINE(performance-unnecessary-value-param)
-        [&](const SharedBuffer buffer) {
+        [&](const SharedBuffer buffer)
+        {
             ParsedBuffer parsed_buffer;
             parsed_buffer.buffer = buffer;
             scripting_environment.ProcessElements(*buffer,
@@ -515,19 +489,17 @@ Extractor::ParsedOSMData Extractor::ParseOSMData(ScriptingEnvironment &scripting
     unsigned number_of_ways = 0;
     unsigned number_of_restrictions = 0;
     unsigned number_of_maneuver_overrides = 0;
-#if TBB_VERSION_MAJOR == 2020
-    tbb::filter_t<ParsedBuffer, void> buffer_storage(
-        tbb::filter::serial_in_order, [&](const ParsedBuffer &parsed_buffer) {
-#else
     tbb::filter<ParsedBuffer, void> buffer_storage(
-        tbb::filter_mode::serial_in_order, [&](const ParsedBuffer &parsed_buffer) {
-#endif
+        tbb::filter_mode::serial_in_order,
+        [&](const ParsedBuffer &parsed_buffer)
+        {
             number_of_nodes += parsed_buffer.resulting_nodes.size();
             // put parsed objects thru extractor callbacks
             for (const auto &result : parsed_buffer.resulting_nodes)
             {
                 extractor_callbacks->ProcessNode(result.first, result.second);
             }
+
             number_of_ways += parsed_buffer.resulting_ways.size();
             for (const auto &result : parsed_buffer.resulting_ways)
             {
@@ -547,15 +519,11 @@ Extractor::ParsedOSMData Extractor::ParseOSMData(ScriptingEnvironment &scripting
             }
         });
 
-#if TBB_VERSION_MAJOR == 2020
-    tbb::filter_t<SharedBuffer, std::shared_ptr<ExtractionRelationContainer>> buffer_relation_cache(
-        tbb::filter::parallel,
-#else
     tbb::filter<SharedBuffer, std::shared_ptr<ExtractionRelationContainer>> buffer_relation_cache(
         tbb::filter_mode::parallel,
-#endif
         // NOLINTNEXTLINE(performance-unnecessary-value-param)
-        [&](const SharedBuffer buffer) {
+        [&](const SharedBuffer buffer)
+        {
             if (!buffer)
                 return std::shared_ptr<ExtractionRelationContainer>{};
 
@@ -590,15 +558,11 @@ Extractor::ParsedOSMData Extractor::ParseOSMData(ScriptingEnvironment &scripting
         });
 
     unsigned number_of_relations = 0;
-#if TBB_VERSION_MAJOR == 2020
-    tbb::filter_t<std::shared_ptr<ExtractionRelationContainer>, void> buffer_storage_relation(
-        tbb::filter::serial_in_order,
-#else
     tbb::filter<std::shared_ptr<ExtractionRelationContainer>, void> buffer_storage_relation(
         tbb::filter_mode::serial_in_order,
-#endif
         // NOLINTNEXTLINE(performance-unnecessary-value-param)
-        [&](const std::shared_ptr<ExtractionRelationContainer> parsed_relations) {
+        [&](const std::shared_ptr<ExtractionRelationContainer> parsed_relations)
+        {
             number_of_relations += parsed_relations->GetRelationsNum();
             relations.Merge(std::move(*parsed_relations));
         });
@@ -682,8 +646,6 @@ Extractor::ParsedOSMData Extractor::ParseOSMData(ScriptingEnvironment &scripting
     return ParsedOSMData{std::move(turn_lane_map),
                          std::move(extraction_containers.turn_restrictions),
                          std::move(extraction_containers.internal_maneuver_overrides),
-                         std::move(extraction_containers.internal_traffic_signals),
-                         std::move(extraction_containers.used_barrier_nodes),
                          std::move(osm_coordinates),
                          std::move(osm_node_ids),
                          std::move(extraction_containers.used_edges),
@@ -702,7 +664,7 @@ void Extractor::FindComponents(unsigned number_of_edge_based_nodes,
 
     for (const auto &edge : input_edge_list)
     {
-        BOOST_ASSERT_MSG(static_cast<unsigned int>(std::max(edge.data.weight, 1)) > 0,
+        BOOST_ASSERT_MSG((std::max(edge.data.weight, EdgeWeight{1})) > EdgeWeight{0},
                          "edge distance < 1");
         BOOST_ASSERT(edge.source < number_of_edge_based_nodes);
         BOOST_ASSERT(edge.target < number_of_edge_based_nodes);
@@ -735,7 +697,7 @@ void Extractor::FindComponents(unsigned number_of_edge_based_nodes,
 
     auto uncontracted_graph = UncontractedGraph(number_of_edge_based_nodes, edges);
 
-    TarjanSCC<UncontractedGraph> component_search(uncontracted_graph);
+    util::TarjanSCC<UncontractedGraph> component_search(uncontracted_graph);
     component_search.Run();
 
     for (NodeID node_id = 0; node_id < number_of_edge_based_nodes; ++node_id)
@@ -757,8 +719,6 @@ EdgeID Extractor::BuildEdgeExpandedGraph(
     const util::NodeBasedDynamicGraph &node_based_graph,
     const std::vector<util::Coordinate> &coordinates,
     const CompressedEdgeContainer &compressed_edge_container,
-    const std::unordered_set<NodeID> &barrier_nodes,
-    const TrafficSignals &traffic_signals,
     const RestrictionGraph &restriction_graph,
     const std::unordered_set<EdgeID> &segregated_edges,
     const NameTable &name_table,
@@ -778,14 +738,13 @@ EdgeID Extractor::BuildEdgeExpandedGraph(
     EdgeBasedGraphFactory edge_based_graph_factory(node_based_graph,
                                                    edge_based_nodes_container,
                                                    compressed_edge_container,
-                                                   barrier_nodes,
-                                                   traffic_signals,
                                                    coordinates,
                                                    name_table,
                                                    segregated_edges,
                                                    turn_lane_map);
 
-    const auto create_edge_based_edges = [&]() {
+    const auto create_edge_based_edges = [&]()
+    {
         // scoped to release intermediate data structures right after the call
         RestrictionMap unconditional_node_restriction_map(restriction_graph);
         ConditionalRestrictionMap conditional_node_restriction_map(restriction_graph);
@@ -831,9 +790,8 @@ void Extractor::BuildRTree(std::vector<EdgeBasedNodeSegment> edge_based_node_seg
     auto start_point_count = std::accumulate(edge_based_node_segments.begin(),
                                              edge_based_node_segments.end(),
                                              0,
-                                             [](const size_t so_far, const auto &segment) {
-                                                 return so_far + (segment.is_startpoint ? 1 : 0);
-                                             });
+                                             [](const size_t so_far, const auto &segment)
+                                             { return so_far + (segment.is_startpoint ? 1 : 0); });
     if (start_point_count == 0)
     {
         throw util::exception("There are no snappable edges left after processing.  Are you "
@@ -867,7 +825,6 @@ void Extractor::ProcessGuidanceTurns(
     const extractor::EdgeBasedNodeDataContainer &edge_based_node_container,
     const std::vector<util::Coordinate> &node_coordinates,
     const CompressedEdgeContainer &compressed_edge_container,
-    const std::unordered_set<NodeID> &barrier_nodes,
     const RestrictionGraph &restriction_graph,
     const NameTable &name_table,
     LaneDescriptionMap lane_description_map,
@@ -894,7 +851,7 @@ void Extractor::ProcessGuidanceTurns(
                                       edge_based_node_container,
                                       node_coordinates,
                                       compressed_edge_container,
-                                      barrier_nodes,
+                                      scripting_environment.m_obstacle_map,
                                       unconditional_node_restriction_map,
                                       way_restriction_map,
                                       name_table,
@@ -945,5 +902,4 @@ void Extractor::ProcessGuidanceTurns(
     util::Log() << "ok, after " << TIMER_SEC(write_guidance_data) << "s";
 }
 
-} // namespace extractor
-} // namespace osrm
+} // namespace osrm::extractor

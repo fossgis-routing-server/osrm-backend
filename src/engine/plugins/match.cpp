@@ -11,16 +11,10 @@
 #include <cstdlib>
 
 #include <algorithm>
-#include <functional>
-#include <memory>
 #include <set>
 #include <vector>
 
-namespace osrm
-{
-namespace engine
-{
-namespace plugins
+namespace osrm::engine::plugins
 {
 
 // Filters PhantomNodes to obtain a set of viable candidates
@@ -54,7 +48,8 @@ void filterCandidates(const std::vector<util::Coordinate> &coordinates,
         // sort by forward id, then by reverse id and then by distance
         std::sort(candidates.begin(),
                   candidates.end(),
-                  [](const PhantomNodeWithDistance &lhs, const PhantomNodeWithDistance &rhs) {
+                  [](const PhantomNodeWithDistance &lhs, const PhantomNodeWithDistance &rhs)
+                  {
                       return lhs.phantom_node.forward_segment_id.id <
                                  rhs.phantom_node.forward_segment_id.id ||
                              (lhs.phantom_node.forward_segment_id.id ==
@@ -69,7 +64,8 @@ void filterCandidates(const std::vector<util::Coordinate> &coordinates,
         auto new_end =
             std::unique(candidates.begin(),
                         candidates.end(),
-                        [](const PhantomNodeWithDistance &lhs, const PhantomNodeWithDistance &rhs) {
+                        [](const PhantomNodeWithDistance &lhs, const PhantomNodeWithDistance &rhs)
+                        {
                             return lhs.phantom_node.forward_segment_id.id ==
                                        rhs.phantom_node.forward_segment_id.id &&
                                    lhs.phantom_node.reverse_segment_id.id ==
@@ -99,9 +95,8 @@ void filterCandidates(const std::vector<util::Coordinate> &coordinates,
         // sort by distance to make pruning effective
         std::sort(candidates.begin(),
                   candidates.end(),
-                  [](const PhantomNodeWithDistance &lhs, const PhantomNodeWithDistance &rhs) {
-                      return lhs.distance < rhs.distance;
-                  });
+                  [](const PhantomNodeWithDistance &lhs, const PhantomNodeWithDistance &rhs)
+                  { return lhs.distance < rhs.distance; });
     }
 }
 
@@ -137,7 +132,8 @@ Status MatchPlugin::HandleRequest(const RoutingAlgorithmsInterface &algorithms,
 
     if (max_radius_map_matching > 0 && std::any_of(parameters.radiuses.begin(),
                                                    parameters.radiuses.end(),
-                                                   [&](const auto &radius) {
+                                                   [&](const auto &radius)
+                                                   {
                                                        if (!radius)
                                                            return false;
                                                        return *radius > max_radius_map_matching;
@@ -185,24 +181,30 @@ Status MatchPlugin::HandleRequest(const RoutingAlgorithmsInterface &algorithms,
     if (tidied.parameters.radiuses.empty())
     {
         search_radiuses.resize(tidied.parameters.coordinates.size(),
-                               routing_algorithms::DEFAULT_GPS_PRECISION * RADIUS_MULTIPLIER);
+                               default_radius.has_value() && *default_radius != -1.0
+                                   ? *default_radius
+                                   : routing_algorithms::DEFAULT_GPS_PRECISION * RADIUS_MULTIPLIER);
     }
     else
     {
         search_radiuses.resize(tidied.parameters.coordinates.size());
-        std::transform(tidied.parameters.radiuses.begin(),
-                       tidied.parameters.radiuses.end(),
-                       search_radiuses.begin(),
-                       [](const boost::optional<double> &maybe_radius) {
-                           if (maybe_radius)
-                           {
-                               return *maybe_radius * RADIUS_MULTIPLIER;
-                           }
-                           else
-                           {
-                               return routing_algorithms::DEFAULT_GPS_PRECISION * RADIUS_MULTIPLIER;
-                           }
-                       });
+        std::transform(
+            tidied.parameters.radiuses.begin(),
+            tidied.parameters.radiuses.end(),
+            search_radiuses.begin(),
+            [default_radius = this->default_radius](const std::optional<double> &maybe_radius)
+            {
+                if (maybe_radius)
+                {
+                    return *maybe_radius * RADIUS_MULTIPLIER;
+                }
+                else
+                {
+                    return default_radius.has_value() && *default_radius != -1.0
+                               ? *default_radius
+                               : routing_algorithms::DEFAULT_GPS_PRECISION * RADIUS_MULTIPLIER;
+                }
+            });
     }
 
     auto candidates_lists =
@@ -211,9 +213,8 @@ Status MatchPlugin::HandleRequest(const RoutingAlgorithmsInterface &algorithms,
     filterCandidates(tidied.parameters.coordinates, candidates_lists);
     if (std::all_of(candidates_lists.begin(),
                     candidates_lists.end(),
-                    [](const std::vector<PhantomNodeWithDistance> &candidates) {
-                        return candidates.empty();
-                    }))
+                    [](const std::vector<PhantomNodeWithDistance> &candidates)
+                    { return candidates.empty(); }))
     {
         return Error("NoSegment",
                      std::string("Could not find a matching segment for any coordinate."),
@@ -314,6 +315,4 @@ Status MatchPlugin::HandleRequest(const RoutingAlgorithmsInterface &algorithms,
 
     return Status::Ok;
 }
-} // namespace plugins
-} // namespace engine
-} // namespace osrm
+} // namespace osrm::engine::plugins

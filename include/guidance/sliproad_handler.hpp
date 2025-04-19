@@ -9,13 +9,10 @@
 
 #include "util/node_based_graph.hpp"
 
+#include <optional>
 #include <vector>
 
-#include <boost/optional.hpp>
-
-namespace osrm
-{
-namespace guidance
+namespace osrm::guidance
 {
 
 // Intersection handlers deal with all issues related to intersections.
@@ -27,7 +24,7 @@ class SliproadHandler final : public IntersectionHandler
                     const std::vector<util::Coordinate> &coordinates,
                     const extractor::CompressedEdgeContainer &compressed_geometries,
                     const extractor::RestrictionMap &node_restriction_map,
-                    const std::unordered_set<NodeID> &barrier_nodes,
+                    const extractor::ObstacleMap &obstacle_nodes,
                     const extractor::TurnLanesIndexedArray &turn_lanes_data,
                     const extractor::NameTable &name_table,
                     const extractor::SuffixTable &street_name_suffix_table);
@@ -45,9 +42,9 @@ class SliproadHandler final : public IntersectionHandler
                             Intersection intersection) const override final;
 
   private:
-    boost::optional<std::size_t> getObviousIndexWithSliproads(const EdgeID from,
-                                                              const Intersection &intersection,
-                                                              const NodeID at) const;
+    std::optional<std::size_t> getObviousIndexWithSliproads(const EdgeID from,
+                                                            const Intersection &intersection,
+                                                            const NodeID at) const;
 
     // Next intersection from `start` onto `onto` is too far away for a Siproad scenario
     bool nextIntersectionIsTooFarAway(const NodeID start, const EdgeID onto) const;
@@ -81,7 +78,6 @@ class SliproadHandler final : public IntersectionHandler
     const extractor::intersection::CoordinateExtractor coordinate_extractor;
 };
 
-} // namespace guidance
-} // namespace osrm
+} // namespace osrm::guidance
 
 #endif /*OSRM_GUIDANCE_SLIPROAD_HANDLER_HPP_*/

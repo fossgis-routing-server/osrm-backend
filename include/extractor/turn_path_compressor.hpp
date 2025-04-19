@@ -3,12 +3,10 @@
 
 #include "util/typedefs.hpp"
 
-#include <boost/unordered_map.hpp>
+#include <unordered_map>
 #include <vector>
 
-namespace osrm
-{
-namespace extractor
+namespace osrm::extractor
 {
 
 struct TurnPath;
@@ -18,7 +16,7 @@ struct UnresolvedManeuverOverride;
 // OSRM stores turn paths as node -> [node] -> node instead of way -> node -> way (or
 // way->[way]->way) as it is done in OSM. These paths need to match the state of graph
 // compression which we perform in the graph compressor that removes certain degree two nodes from
-// the graph (all but the ones with penalties/barriers, as of the state of writing).
+// the graph (all but the ones with obstacles, as of the state of writing).
 // Since this graph compression is performed after creating the turn paths in the extraction
 // phase, we need to update the involved nodes whenever one of the nodes is compressed.
 //
@@ -43,12 +41,11 @@ class TurnPathCompressor
     // via nodes are the same.
     // Similarly, we do not compress the instruction via node in a maneuver override, as we need
     // this to identify the location of the maneuver during routing path-processing.
-    boost::unordered_multimap<NodeID, TurnPath *> starts;
-    boost::unordered_multimap<NodeID, TurnPath *> vias;
-    boost::unordered_multimap<NodeID, TurnPath *> ends;
+    std::unordered_multimap<NodeID, TurnPath *> starts;
+    std::unordered_multimap<NodeID, TurnPath *> vias;
+    std::unordered_multimap<NodeID, TurnPath *> ends;
 };
 
-} // namespace extractor
-} // namespace osrm
+} // namespace osrm::extractor
 
 #endif // OSRM_EXTRACTOR_TURN_PATH_COMPRESSOR_HPP_

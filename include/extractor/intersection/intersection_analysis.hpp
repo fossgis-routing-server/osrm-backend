@@ -6,6 +6,7 @@
 #include "extractor/intersection/intersection_view.hpp"
 #include "extractor/intersection/mergable_road_detector.hpp"
 #include "extractor/node_restriction_map.hpp"
+#include "extractor/obstacles.hpp"
 #include "extractor/turn_lane_types.hpp"
 
 #include "util/coordinate.hpp"
@@ -14,11 +15,7 @@
 #include <unordered_set>
 #include <vector>
 
-namespace osrm
-{
-namespace extractor
-{
-namespace intersection
+namespace osrm::extractor::intersection
 {
 
 IntersectionEdges getIncomingEdges(const util::NodeBasedDynamicGraph &graph,
@@ -30,7 +27,7 @@ IntersectionEdges getOutgoingEdges(const util::NodeBasedDynamicGraph &graph,
 bool isTurnAllowed(const util::NodeBasedDynamicGraph &graph,
                    const EdgeBasedNodeDataContainer &node_data_container,
                    const RestrictionMap &restriction_map,
-                   const std::unordered_set<NodeID> &barrier_nodes,
+                   const ObstacleMap &obstacle_nodes,
                    const IntersectionEdgeGeometries &geometries,
                    const TurnLanesIndexedArray &turn_lanes_data,
                    const IntersectionEdge &from,
@@ -50,14 +47,14 @@ getIntersectionGeometries(const util::NodeBasedDynamicGraph &graph,
 IntersectionView convertToIntersectionView(const util::NodeBasedDynamicGraph &graph,
                                            const EdgeBasedNodeDataContainer &node_data_container,
                                            const RestrictionMap &restriction_map,
-                                           const std::unordered_set<NodeID> &barrier_nodes,
+                                           const ObstacleMap &obstacle_nodes,
                                            const IntersectionEdgeGeometries &edge_geometries,
                                            const TurnLanesIndexedArray &turn_lanes_data,
                                            const IntersectionEdge &incoming_edge,
                                            const IntersectionEdges &outgoing_edges,
                                            const std::unordered_set<EdgeID> &merged_edges);
 
-// Check for restrictions/barriers and generate a list of valid and invalid turns present at
+// Check for restrictions/obstacles and generate a list of valid and invalid turns present at
 // the node reached from `incoming_edge`. The resulting candidates have to be analyzed
 // for their actual instructions later on.
 template <bool USE_CLOSE_COORDINATE>
@@ -66,7 +63,7 @@ IntersectionView getConnectedRoads(const util::NodeBasedDynamicGraph &graph,
                                    const std::vector<util::Coordinate> &node_coordinates,
                                    const extractor::CompressedEdgeContainer &compressed_geometries,
                                    const RestrictionMap &node_restriction_map,
-                                   const std::unordered_set<NodeID> &barrier_nodes,
+                                   const ObstacleMap &obstacle_nodes,
                                    const TurnLanesIndexedArray &turn_lanes_data,
                                    const IntersectionEdge &incoming_edge);
 
@@ -74,23 +71,21 @@ IntersectionView
 getConnectedRoadsForEdgeGeometries(const util::NodeBasedDynamicGraph &graph,
                                    const EdgeBasedNodeDataContainer &node_data_container,
                                    const RestrictionMap &node_restriction_map,
-                                   const std::unordered_set<NodeID> &barrier_nodes,
+                                   const ObstacleMap &obstacle_nodes,
                                    const TurnLanesIndexedArray &turn_lanes_data,
                                    const IntersectionEdge &incoming_edge,
                                    const IntersectionEdgeGeometries &edge_geometries,
                                    const std::unordered_set<EdgeID> &merged_edge_ids);
 
-// Graph Compression cannot compress every setting. For example any barrier/traffic light cannot
+// Graph Compression cannot compress every setting. For example nodes with obstacles cannot
 // be compressed. As a result, a simple road of the form `a ----- b` might end up as having an
-// intermediate intersection, if there is a traffic light in between. If we want to look farther
+// intermediate intersection, if there is an obstacle in between. If we want to look farther
 // down a road, finding the next actual decision requires the look at multiple intersections.
 // Here we follow the road until we either reach a dead end or find the next intersection with
 // more than a single next road. This function skips over degree two nodes to find correct input
 // for getConnectedRoads.
 IntersectionEdge skipDegreeTwoNodes(const util::NodeBasedDynamicGraph &graph,
                                     IntersectionEdge road);
-} // namespace intersection
-} // namespace extractor
-} // namespace osrm
+} // namespace osrm::extractor::intersection
 
 #endif

@@ -1,17 +1,12 @@
 #ifndef RESTRICTION_HPP
 #define RESTRICTION_HPP
 
+#include "turn_path.hpp"
 #include "util/coordinate.hpp"
 #include "util/opening_hours.hpp"
 #include "util/typedefs.hpp"
 
-#include "mapbox/variant.hpp"
-#include "turn_path.hpp"
-#include <limits>
-
-namespace osrm
-{
-namespace extractor
+namespace osrm::extractor
 {
 
 // External (OSM) representation of restriction
@@ -63,7 +58,6 @@ struct TurnRestriction
 
     static std::string Name() { return "turn restriction"; };
 };
-} // namespace extractor
-} // namespace osrm
+} // namespace osrm::extractor
 
 #endif // RESTRICTION_HPP

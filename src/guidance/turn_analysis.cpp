@@ -6,13 +6,10 @@
 #include "util/coordinate_calculation.hpp"
 
 #include <cstddef>
-#include <set>
 #include <unordered_set>
 #include <utility>
 
-namespace osrm
-{
-namespace guidance
+namespace osrm::guidance
 {
 
 using EdgeData = util::NodeBasedDynamicGraph::EdgeData;
@@ -22,7 +19,7 @@ TurnAnalysis::TurnAnalysis(const util::NodeBasedDynamicGraph &node_based_graph,
                            const std::vector<util::Coordinate> &node_coordinates,
                            const extractor::CompressedEdgeContainer &compressed_edge_container,
                            const extractor::RestrictionMap &restriction_map,
-                           const std::unordered_set<NodeID> &barrier_nodes,
+                           const extractor::ObstacleMap &obstacle_nodes,
                            const extractor::TurnLanesIndexedArray &turn_lanes_data,
                            const extractor::NameTable &name_table,
                            const extractor::SuffixTable &street_name_suffix_table)
@@ -31,7 +28,7 @@ TurnAnalysis::TurnAnalysis(const util::NodeBasedDynamicGraph &node_based_graph,
                                                              node_coordinates,
                                                              compressed_edge_container,
                                                              restriction_map,
-                                                             barrier_nodes,
+                                                             obstacle_nodes,
                                                              turn_lanes_data,
                                                              name_table,
                                                              street_name_suffix_table),
@@ -40,7 +37,7 @@ TurnAnalysis::TurnAnalysis(const util::NodeBasedDynamicGraph &node_based_graph,
                        node_coordinates,
                        compressed_edge_container,
                        restriction_map,
-                       barrier_nodes,
+                       obstacle_nodes,
                        turn_lanes_data,
                        name_table,
                        street_name_suffix_table),
@@ -49,7 +46,7 @@ TurnAnalysis::TurnAnalysis(const util::NodeBasedDynamicGraph &node_based_graph,
                    node_coordinates,
                    compressed_edge_container,
                    restriction_map,
-                   barrier_nodes,
+                   obstacle_nodes,
                    turn_lanes_data,
                    name_table,
                    street_name_suffix_table),
@@ -58,7 +55,7 @@ TurnAnalysis::TurnAnalysis(const util::NodeBasedDynamicGraph &node_based_graph,
                        node_coordinates,
                        compressed_edge_container,
                        restriction_map,
-                       barrier_nodes,
+                       obstacle_nodes,
                        turn_lanes_data,
                        name_table,
                        street_name_suffix_table),
@@ -67,7 +64,7 @@ TurnAnalysis::TurnAnalysis(const util::NodeBasedDynamicGraph &node_based_graph,
                             node_coordinates,
                             compressed_edge_container,
                             restriction_map,
-                            barrier_nodes,
+                            obstacle_nodes,
                             turn_lanes_data,
                             name_table,
                             street_name_suffix_table),
@@ -76,7 +73,7 @@ TurnAnalysis::TurnAnalysis(const util::NodeBasedDynamicGraph &node_based_graph,
                        node_coordinates,
                        compressed_edge_container,
                        restriction_map,
-                       barrier_nodes,
+                       obstacle_nodes,
                        turn_lanes_data,
                        name_table,
                        street_name_suffix_table),
@@ -85,7 +82,7 @@ TurnAnalysis::TurnAnalysis(const util::NodeBasedDynamicGraph &node_based_graph,
                          node_coordinates,
                          compressed_edge_container,
                          restriction_map,
-                         barrier_nodes,
+                         obstacle_nodes,
                          turn_lanes_data,
                          name_table,
                          street_name_suffix_table)
@@ -107,7 +104,8 @@ Intersection TurnAnalysis::AssignTurnTypes(
     std::transform(intersection_view.begin(),
                    intersection_view.end(),
                    std::back_inserter(intersection),
-                   [&](const extractor::intersection::IntersectionViewData &data) {
+                   [&](const extractor::intersection::IntersectionViewData &data)
+                   {
                        return ConnectedRoad(data,
                                             {TurnType::Invalid, DirectionModifier::UTurn},
                                             INVALID_LANE_DATAID);
@@ -163,10 +161,13 @@ Intersection TurnAnalysis::AssignTurnTypes(
     // Turn On Ramps Into Off Ramps, if we come from a motorway-like road
     if (node_based_graph.GetEdgeData(entering_via_edge).flags.road_classification.IsMotorwayClass())
     {
-        std::for_each(intersection.begin(), intersection.end(), [](ConnectedRoad &road) {
-            if (road.instruction.type == TurnType::OnRamp)
-                road.instruction.type = TurnType::OffRamp;
-        });
+        std::for_each(intersection.begin(),
+                      intersection.end(),
+                      [](ConnectedRoad &road)
+                      {
+                          if (road.instruction.type == TurnType::OnRamp)
+                              road.instruction.type = TurnType::OffRamp;
+                      });
     }
 
     // After we ran all handlers and determined instruction type
@@ -199,5 +200,4 @@ Intersection TurnAnalysis::setTurnTypes(const NodeID node_prior_to_intersection,
     return intersection;
 }
 
-} // namespace guidance
-} // namespace osrm
+} // namespace osrm::guidance

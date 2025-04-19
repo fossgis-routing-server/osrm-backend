@@ -3,15 +3,13 @@
 #include "engine/datafacade/datafacade_base.hpp"
 
 #include <boost/assert.hpp>
-#include <boost/unordered_set.hpp>
 
 #include <algorithm>
 #include <iterator>
 #include <tuple>
+#include <unordered_set>
 
-namespace osrm
-{
-namespace engine
+namespace osrm::engine
 {
 
 bool SegmentHint::IsValid(const util::Coordinate new_input_coordinates,
@@ -95,10 +93,10 @@ Hint Hint::FromBase64(const std::string &base64Hint)
 bool Hint::IsValid(const util::Coordinate new_input_coordinates,
                    const datafacade::BaseDataFacade &facade) const
 {
-    const auto all_valid =
-        std::all_of(segment_hints.begin(), segment_hints.end(), [&](const auto &seg_hint) {
-            return seg_hint.IsValid(new_input_coordinates, facade);
-        });
+    const auto all_valid = std::all_of(segment_hints.begin(),
+                                       segment_hints.end(),
+                                       [&](const auto &seg_hint)
+                                       { return seg_hint.IsValid(new_input_coordinates, facade); });
     if (!all_valid)
     {
         return false;
@@ -106,8 +104,8 @@ bool Hint::IsValid(const util::Coordinate new_input_coordinates,
 
     // Check hints do not contain duplicate segment pairs
     // We can't allow duplicates as search heaps do not support it.
-    boost::unordered_set<NodeID> forward_segments;
-    boost::unordered_set<NodeID> reverse_segments;
+    std::unordered_set<NodeID> forward_segments;
+    std::unordered_set<NodeID> reverse_segments;
     for (const auto &seg_hint : segment_hints)
     {
         const auto forward_res = forward_segments.insert(seg_hint.phantom.forward_segment_id.id);
@@ -124,5 +122,4 @@ bool Hint::IsValid(const util::Coordinate new_input_coordinates,
     return true;
 }
 
-} // namespace engine
-} // namespace osrm
+} // namespace osrm::engine

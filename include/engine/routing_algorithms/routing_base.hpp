@@ -16,23 +16,14 @@
 #include <boost/assert.hpp>
 
 #include <cstddef>
-#include <cstdint>
 
 #include <algorithm>
-#include <functional>
 #include <iterator>
-#include <memory>
 #include <numeric>
 #include <stack>
-#include <utility>
 #include <vector>
 
-namespace osrm
-{
-namespace engine
-{
-
-namespace routing_algorithms
+namespace osrm::engine::routing_algorithms
 {
 
 namespace details
@@ -43,14 +34,14 @@ void insertSourceInForwardHeap(Heap &forward_heap, const PhantomNode &source)
     if (source.IsValidForwardSource())
     {
         forward_heap.Insert(source.forward_segment_id.id,
-                            -source.GetForwardWeightPlusOffset(),
+                            EdgeWeight{0} - source.GetForwardWeightPlusOffset(),
                             source.forward_segment_id.id);
     }
 
     if (source.IsValidReverseSource())
     {
         forward_heap.Insert(source.reverse_segment_id.id,
-                            -source.GetReverseWeightPlusOffset(),
+                            EdgeWeight{0} - source.GetReverseWeightPlusOffset(),
                             source.reverse_segment_id.id);
     }
 }
@@ -76,24 +67,27 @@ void insertTargetInReverseHeap(Heap &reverse_heap, const PhantomNode &target)
 static constexpr bool FORWARD_DIRECTION = true;
 static constexpr bool REVERSE_DIRECTION = false;
 
-// Identify nodes in the forward(reverse) search direction that will require loop forcing
+// Identify nodes in the forward(reverse) search direction that will require step forcing
 // e.g. if source and destination nodes are on the same segment.
-std::vector<NodeID> getForwardLoopNodes(const PhantomEndpointCandidates &candidates);
-std::vector<NodeID> getForwardLoopNodes(const PhantomCandidatesToTarget &candidates);
-std::vector<NodeID> getBackwardLoopNodes(const PhantomEndpointCandidates &candidates);
-std::vector<NodeID> getBackwardLoopNodes(const PhantomCandidatesToTarget &candidates);
+std::vector<NodeID> getForwardForceNodes(const PhantomEndpointCandidates &candidates);
+std::vector<NodeID> getForwardForceNodes(const PhantomCandidatesToTarget &candidates);
+std::vector<NodeID> getBackwardForceNodes(const PhantomEndpointCandidates &candidates);
+std::vector<NodeID> getBackwardForceNodes(const PhantomCandidatesToTarget &candidates);
 
 // Find the specific phantom node endpoints for a given path from a list of candidates.
 PhantomEndpoints endpointsFromCandidates(const PhantomEndpointCandidates &candidates,
                                          const std::vector<NodeID> &path);
 
 template <typename HeapNodeT>
-inline bool force_loop(const std::vector<NodeID> &force_nodes, const HeapNodeT &heap_node)
+inline bool shouldForceStep(const std::vector<NodeID> &force_nodes,
+                            const HeapNodeT &forward_heap_node,
+                            const HeapNodeT &reverse_heap_node)
 {
-    // if loops are forced, they are so at the source
-    return !force_nodes.empty() &&
-           std::find(force_nodes.begin(), force_nodes.end(), heap_node.node) != force_nodes.end() &&
-           heap_node.data.parent == heap_node.node;
+    // routing steps are forced when the node is a source of both forward and reverse search heaps.
+    return forward_heap_node.data.parent == forward_heap_node.node &&
+           reverse_heap_node.data.parent == reverse_heap_node.node &&
+           std::find(force_nodes.begin(), force_nodes.end(), forward_heap_node.node) !=
+               force_nodes.end();
 }
 
 template <typename Heap>
@@ -127,18 +121,18 @@ void insertSourceInHeap(ManyToManyQueryHeap &heap, const PhantomNodeCandidates &
         if (phantom_node.IsValidForwardSource())
         {
             heap.Insert(phantom_node.forward_segment_id.id,
-                        -phantom_node.GetForwardWeightPlusOffset(),
+                        EdgeWeight{0} - phantom_node.GetForwardWeightPlusOffset(),
                         {phantom_node.forward_segment_id.id,
-                         -phantom_node.GetForwardDuration(),
-                         -phantom_node.GetForwardDistance()});
+                         EdgeDuration{0} - phantom_node.GetForwardDuration(),
+                         EdgeDistance{0} - phantom_node.GetForwardDistance()});
         }
         if (phantom_node.IsValidReverseSource())
         {
             heap.Insert(phantom_node.reverse_segment_id.id,
-                        -phantom_node.GetReverseWeightPlusOffset(),
+                        EdgeWeight{0} - phantom_node.GetReverseWeightPlusOffset(),
                         {phantom_node.reverse_segment_id.id,
-                         -phantom_node.GetReverseDuration(),
-                         -phantom_node.GetReverseDistance()});
+                         EdgeDuration{0} - phantom_node.GetReverseDuration(),
+                         EdgeDistance{0} - phantom_node.GetReverseDistance()});
         }
     }
 }
@@ -195,8 +189,10 @@ void annotatePath(const FacadeT &facade,
     std::vector<SegmentDuration> duration_vector;
     std::vector<DatasourceID> datasource_vector;
 
-    const auto get_segment_geometry = [&](const auto geometry_index) {
-        const auto copy = [](auto &vector, const auto range) {
+    const auto get_segment_geometry = [&](const auto geometry_index)
+    {
+        const auto copy = [](auto &vector, const auto range)
+        {
             vector.resize(range.size());
             std::copy(range.begin(), range.end(), vector.begin());
         };
@@ -251,25 +247,24 @@ void annotatePath(const FacadeT &facade,
         BOOST_ASSERT(start_index < end_index);
         for (std::size_t segment_idx = start_index; segment_idx < end_index; ++segment_idx)
         {
-            unpacked_path.push_back(
-                PathData{node_id,
-                         id_vector[segment_idx + 1],
-                         static_cast<EdgeWeight>(weight_vector[segment_idx]),
-                         0,
-                         static_cast<EdgeDuration>(duration_vector[segment_idx]),
-                         0,
-                         datasource_vector[segment_idx],
-                         boost::none});
+            unpacked_path.push_back(PathData{node_id,
+                                             id_vector[segment_idx + 1],
+                                             alias_cast<EdgeWeight>(weight_vector[segment_idx]),
+                                             {0},
+                                             alias_cast<EdgeDuration>(duration_vector[segment_idx]),
+                                             {0},
+                                             datasource_vector[segment_idx],
+                                             std::nullopt});
         }
         BOOST_ASSERT(!unpacked_path.empty());
 
         const auto turn_duration = facade.GetDurationPenaltyForEdgeID(turn_id);
         const auto turn_weight = facade.GetWeightPenaltyForEdgeID(turn_id);
 
-        unpacked_path.back().duration_until_turn += turn_duration;
-        unpacked_path.back().duration_of_turn = turn_duration;
-        unpacked_path.back().weight_until_turn += turn_weight;
-        unpacked_path.back().weight_of_turn = turn_weight;
+        unpacked_path.back().duration_until_turn += alias_cast<EdgeDuration>(turn_duration);
+        unpacked_path.back().duration_of_turn = alias_cast<EdgeDuration>(turn_duration);
+        unpacked_path.back().weight_until_turn += alias_cast<EdgeWeight>(turn_weight);
+        unpacked_path.back().weight_of_turn = alias_cast<EdgeWeight>(turn_weight);
         unpacked_path.back().turn_edge = turn_id;
     }
 
@@ -311,12 +306,12 @@ void annotatePath(const FacadeT &facade,
         unpacked_path.push_back(
             PathData{target_node_id,
                      id_vector[start_index < end_index ? segment_idx + 1 : segment_idx - 1],
-                     static_cast<EdgeWeight>(weight_vector[segment_idx]),
-                     0,
-                     static_cast<EdgeDuration>(duration_vector[segment_idx]),
-                     0,
+                     alias_cast<EdgeWeight>(weight_vector[segment_idx]),
+                     {0},
+                     alias_cast<EdgeDuration>(duration_vector[segment_idx]),
+                     {0},
                      datasource_vector[segment_idx],
-                     boost::none});
+                     std::nullopt});
     }
 
     if (!unpacked_path.empty())
@@ -341,9 +336,9 @@ void annotatePath(const FacadeT &facade,
         // node to the first turn would be the same as from end to end of a segment,
         // which is obviously incorrect and not ideal...
         unpacked_path.front().weight_until_turn =
-            std::max(unpacked_path.front().weight_until_turn - source_weight, 0);
+            std::max(unpacked_path.front().weight_until_turn - source_weight, {0});
         unpacked_path.front().duration_until_turn =
-            std::max(unpacked_path.front().duration_until_turn - source_duration, 0);
+            std::max(unpacked_path.front().duration_until_turn - source_duration, {0});
     }
 }
 
@@ -410,7 +405,7 @@ template <typename FacadeT> EdgeDistance computeEdgeDistance(const FacadeT &faca
 {
     const auto geometry_index = facade.GetGeometryIndex(node_id);
 
-    EdgeDistance total_distance = 0.0;
+    EdgeDistance total_distance = {0};
 
     auto geometry_range = facade.GetUncompressedForwardGeometry(geometry_index.id);
     for (auto current = geometry_range.begin(); current < geometry_range.end() - 1; ++current)
@@ -422,8 +417,6 @@ template <typename FacadeT> EdgeDistance computeEdgeDistance(const FacadeT &faca
     return total_distance;
 }
 
-} // namespace routing_algorithms
-} // namespace engine
-} // namespace osrm
+} // namespace osrm::engine::routing_algorithms
 
 #endif // OSRM_ENGINE_ROUTING_BASE_HPP

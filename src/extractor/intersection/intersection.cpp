@@ -1,15 +1,10 @@
 #include "guidance/intersection.hpp"
 
-#include <limits>
 #include <string>
 
 #include <boost/range/adaptors.hpp>
 
-namespace osrm
-{
-namespace extractor
-{
-namespace intersection
+namespace osrm::extractor::intersection
 {
 
 bool IntersectionViewData::CompareByAngle(const IntersectionViewData &other) const
@@ -37,6 +32,4 @@ std::string toString(const IntersectionViewData &view)
     return result;
 }
 
-} // namespace intersection
-} // namespace extractor
-} // namespace osrm
+} // namespace osrm::extractor::intersection

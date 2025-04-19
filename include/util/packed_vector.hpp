@@ -13,16 +13,13 @@
 
 #include <array>
 #include <cmath>
-#include <vector>
 
 #if defined(_MSC_VER)
 // for `InterlockedCompareExchange64`
 #include <windows.h>
 #endif
 
-namespace osrm
-{
-namespace util
+namespace osrm::util
 {
 namespace detail
 {
@@ -83,17 +80,43 @@ inline T get_upper_half_value(WordT word,
 }
 
 template <typename WordT, typename T>
-inline WordT set_lower_value(WordT word, WordT mask, std::uint8_t offset, T value)
+inline WordT set_lower_value(WordT word,
+                             WordT mask,
+                             std::uint8_t offset,
+                             T value,
+                             typename std::enable_if_t<std::is_integral<T>::value> * = nullptr)
 {
     static_assert(std::is_unsigned<WordT>::value, "Only unsigned word types supported for now.");
     return (word & ~mask) | ((static_cast<WordT>(value) << offset) & mask);
 }
 
 template <typename WordT, typename T>
-inline WordT set_upper_value(WordT word, WordT mask, std::uint8_t offset, T value)
+inline WordT set_upper_value(WordT word,
+                             WordT mask,
+                             std::uint8_t offset,
+                             T value,
+                             typename std::enable_if_t<std::is_integral<T>::value> * = nullptr)
 {
     static_assert(std::is_unsigned<WordT>::value, "Only unsigned word types supported for now.");
     return (word & ~mask) | ((static_cast<WordT>(value) >> offset) & mask);
+}
+
+template <typename WordT, typename T>
+inline WordT set_lower_value(
+    WordT word, WordT mask, std::uint8_t offset, T value, typename T::value_type * = nullptr)
+{
+    static_assert(std::is_unsigned<WordT>::value, "Only unsigned word types supported for now.");
+    return (word & ~mask) |
+           ((static_cast<WordT>(static_cast<typename T::value_type>(value)) << offset) & mask);
+}
+
+template <typename WordT, typename T>
+inline WordT set_upper_value(
+    WordT word, WordT mask, std::uint8_t offset, T value, typename T::value_type * = nullptr)
+{
+    static_assert(std::is_unsigned<WordT>::value, "Only unsigned word types supported for now.");
+    return (word & ~mask) |
+           ((static_cast<WordT>(static_cast<typename T::value_type>(value)) >> offset) & mask);
 }
 
 inline bool compare_and_swap(uint64_t *ptr, uint64_t old_value, uint64_t new_value)
@@ -129,8 +152,7 @@ template <typename T, std::size_t Bits, storage::Ownership Ownership> class Pack
     // number of words per block
     static constexpr std::size_t BLOCK_WORDS = (Bits * BLOCK_ELEMENTS) / WORD_BITS;
 
-    // C++14 does not allow operator[] to be constexpr, this is fixed in C++17.
-    static /* constexpr */ std::array<WordT, BLOCK_ELEMENTS> initialize_lower_mask()
+    static constexpr std::array<WordT, BLOCK_ELEMENTS> initialize_lower_mask()
     {
         std::array<WordT, BLOCK_ELEMENTS> lower_mask;
 
@@ -146,7 +168,7 @@ template <typename T, std::size_t Bits, storage::Ownership Ownership> class Pack
         return lower_mask;
     }
 
-    static /* constexpr */ std::array<WordT, BLOCK_ELEMENTS> initialize_upper_mask()
+    static constexpr std::array<WordT, BLOCK_ELEMENTS> initialize_upper_mask()
     {
         std::array<WordT, BLOCK_ELEMENTS> upper_mask;
 
@@ -170,7 +192,7 @@ template <typename T, std::size_t Bits, storage::Ownership Ownership> class Pack
         return upper_mask;
     }
 
-    static /* constexpr */ std::array<std::uint8_t, BLOCK_ELEMENTS> initialize_lower_offset()
+    static constexpr std::array<std::uint8_t, BLOCK_ELEMENTS> initialize_lower_offset()
     {
         std::array<std::uint8_t, WORD_BITS> lower_offset;
 
@@ -185,7 +207,7 @@ template <typename T, std::size_t Bits, storage::Ownership Ownership> class Pack
         return lower_offset;
     }
 
-    static /* constexpr */ std::array<std::uint8_t, BLOCK_ELEMENTS> initialize_upper_offset()
+    static constexpr std::array<std::uint8_t, BLOCK_ELEMENTS> initialize_upper_offset()
     {
         std::array<std::uint8_t, BLOCK_ELEMENTS> upper_offset;
 
@@ -208,7 +230,7 @@ template <typename T, std::size_t Bits, storage::Ownership Ownership> class Pack
         return upper_offset;
     }
 
-    static /* constexpr */ std::array<std::uint8_t, BLOCK_ELEMENTS> initialize_word_offset()
+    static constexpr std::array<std::uint8_t, BLOCK_ELEMENTS> initialize_word_offset()
     {
         std::array<std::uint8_t, BLOCK_ELEMENTS> word_offset;
 
@@ -222,28 +244,15 @@ template <typename T, std::size_t Bits, storage::Ownership Ownership> class Pack
         return word_offset;
     }
 
-    // For now we need to call these on object creation
-    void initialize()
-    {
-        lower_mask = initialize_lower_mask();
-        upper_mask = initialize_upper_mask();
-        lower_offset = initialize_lower_offset();
-        upper_offset = initialize_upper_offset();
-        word_offset = initialize_word_offset();
-    }
-
     // mask for the lower/upper word of a record
-    // TODO: With C++17 these could be constexpr
-    /* static constexpr */ std::array<WordT, BLOCK_ELEMENTS>
-        lower_mask /* = initialize_lower_mask()*/;
-    /* static constexpr */ std::array<WordT, BLOCK_ELEMENTS>
-        upper_mask /* = initialize_upper_mask()*/;
-    /* static constexpr */ std::array<std::uint8_t, BLOCK_ELEMENTS>
-        lower_offset /* = initialize_lower_offset()*/;
-    /* static constexpr */ std::array<std::uint8_t, BLOCK_ELEMENTS>
-        upper_offset /* = initialize_upper_offset()*/;
+    static constexpr std::array<WordT, BLOCK_ELEMENTS> lower_mask = initialize_lower_mask();
+    static constexpr std::array<WordT, BLOCK_ELEMENTS> upper_mask = initialize_upper_mask();
+    static constexpr std::array<std::uint8_t, BLOCK_ELEMENTS> lower_offset =
+        initialize_lower_offset();
+    static constexpr std::array<std::uint8_t, BLOCK_ELEMENTS> upper_offset =
+        initialize_upper_offset();
     // in which word of the block is the element
-    /* static constexpr */ std::array<std::uint8_t, BLOCK_ELEMENTS> word_offset =
+    static constexpr std::array<std::uint8_t, BLOCK_ELEMENTS> word_offset =
         initialize_word_offset();
 
     struct InternalIndex
@@ -287,6 +296,12 @@ template <typename T, std::size_t Bits, storage::Ownership Ownership> class Pack
             return &container == &other.container && internal_index == other.internal_index;
         }
 
+        // FIXME: This is needed for tests on Boost ranges to correctly compare Alias values.
+        template <typename F, typename U> bool operator!=(const osrm::Alias<F, U> value) const
+        {
+            return container.get_value(internal_index) != value;
+        }
+
         friend std::ostream &operator<<(std::ostream &os, const internal_reference &rhs)
         {
             return os << static_cast<T>(rhs);
@@ -304,17 +319,16 @@ template <typename T, std::size_t Bits, storage::Ownership Ownership> class Pack
                                         boost::random_access_traversal_tag,
                                         ReferenceT>
     {
-        typedef boost::iterator_facade<iterator_impl<DataT, ContainerT, ReferenceT>,
-                                       DataT,
-                                       boost::random_access_traversal_tag,
-                                       ReferenceT>
-            base_t;
+        using base_t = boost::iterator_facade<iterator_impl<DataT, ContainerT, ReferenceT>,
+                                              DataT,
+                                              boost::random_access_traversal_tag,
+                                              ReferenceT>;
 
       public:
-        typedef typename base_t::value_type value_type;
-        typedef typename base_t::difference_type difference_type;
-        typedef typename base_t::reference reference;
-        typedef std::random_access_iterator_tag iterator_category;
+        using value_type = typename base_t::value_type;
+        using difference_type = typename base_t::difference_type;
+        using reference = typename base_t::reference;
+        using iterator_category = std::random_access_iterator_tag;
 
         explicit iterator_impl()
             : container(nullptr), index(std::numeric_limits<std::size_t>::max())
@@ -324,6 +338,8 @@ template <typename T, std::size_t Bits, storage::Ownership Ownership> class Pack
             : container(container), index(index)
         {
         }
+
+        ReferenceT operator[](difference_type n) const { return container->operator[](index + n); }
 
       private:
         void increment() { ++index; }
@@ -349,27 +365,21 @@ template <typename T, std::size_t Bits, storage::Ownership Ownership> class Pack
 
     PackedVector(std::initializer_list<T> list)
     {
-        initialize();
         reserve(list.size());
         for (const auto value : list)
             push_back(value);
     }
 
-    PackedVector() { initialize(); };
+    PackedVector(){};
     PackedVector(const PackedVector &) = default;
     PackedVector(PackedVector &&) = default;
     PackedVector &operator=(const PackedVector &) = default;
     PackedVector &operator=(PackedVector &&) = default;
 
-    PackedVector(std::size_t size)
-    {
-        initialize();
-        resize(size);
-    }
+    PackedVector(std::size_t size) { resize(size); }
 
     PackedVector(std::size_t size, T initial_value)
     {
-        initialize();
         resize(size);
         fill(initial_value);
     }
@@ -377,7 +387,6 @@ template <typename T, std::size_t Bits, storage::Ownership Ownership> class Pack
     PackedVector(util::ViewOrVector<WordT, Ownership> vec_, std::size_t num_elements)
         : vec(std::move(vec_)), num_elements(num_elements)
     {
-        initialize();
     }
 
     // forces the efficient read-only lookup
@@ -570,7 +579,6 @@ template <typename T, std::size_t Bits>
 using PackedVector = detail::PackedVector<T, Bits, storage::Ownership::Container>;
 template <typename T, std::size_t Bits>
 using PackedVectorView = detail::PackedVector<T, Bits, storage::Ownership::View>;
-} // namespace util
-} // namespace osrm
+} // namespace osrm::util
 
 #endif /* PACKED_VECTOR_HPP */

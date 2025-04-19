@@ -3,15 +3,14 @@
 #include "contractor/contractor_graph.hpp"
 #include "contractor/contractor_heap.hpp"
 
-namespace osrm
-{
-namespace contractor
+namespace osrm::contractor
 {
 
 namespace
 {
 void relaxNode(ContractorHeap &heap,
                const ContractorGraph &graph,
+               const std::vector<bool> &contractable,
                const NodeID node,
                const EdgeWeight node_weight,
                const NodeID forbidden_node)
@@ -36,6 +35,10 @@ void relaxNode(ContractorHeap &heap,
         // New Node discovered -> Add to Heap + Node Info Storage
         if (!toHeapNode)
         {
+            if (!contractable[to])
+            {
+                continue;
+            }
             heap.Insert(to, to_weight, ContractorHeapData{current_hop, false});
         }
         // Found a shorter Path -> Update weight
@@ -51,6 +54,7 @@ void relaxNode(ContractorHeap &heap,
 
 void search(ContractorHeap &heap,
             const ContractorGraph &graph,
+            const std::vector<bool> &contractable,
             const unsigned number_of_targets,
             const int node_limit,
             const EdgeWeight weight_limit,
@@ -82,8 +86,7 @@ void search(ContractorHeap &heap,
             }
         }
 
-        relaxNode(heap, graph, node, node_weight, forbidden_node);
+        relaxNode(heap, graph, contractable, node, node_weight, forbidden_node);
     }
 }
-} // namespace contractor
-} // namespace osrm
+} // namespace osrm::contractor

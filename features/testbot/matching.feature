@@ -136,22 +136,6 @@ Feature: Basic Map Matching
             | trace | matchings |
             | abcbd | abbd      |
 
-    Scenario: Testbot - Map matching with core factor
-        Given the contract extra arguments "--core 0.8"
-        Given the node map
-            """
-            a b c d
-                e
-            """
-
-        And the ways
-            | nodes | oneway |
-            | abcd  | no     |
-
-        When I match I should get
-            | trace | timestamps | matchings |
-            | abcd  | 0 1 2 3    | abcd      |
-
     Scenario: Testbot - Map matching with small distortion
         Given the node map
             """
@@ -810,6 +794,6 @@ Feature: Basic Map Matching
         # These should have the same weights/duration in either direction
         When I match I should get
           | trace | geometry             | a:distance    | a:duration | a:weight | duration |
-          | 2345  | 1.00018,1,1.000314,1 | 14.914666491  | 1.4        | 1.4      | 1.4      |
-          | 4321  | 1.00027,1,1.000135,1 | 15.025969972  | 1.5        | 1.5      | 1.5      |
+          | 2345  | 1.00018,1,1.000314,1 | 14.91466649  | 1.4        | 1.4      | 1.4      |
+          | 4321  | 1.00027,1,1.000135,1 | 15.02596997  | 1.5        | 1.5      | 1.5      |
 

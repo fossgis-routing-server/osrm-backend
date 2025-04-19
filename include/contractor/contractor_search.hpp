@@ -8,19 +8,17 @@
 
 #include <cstddef>
 
-namespace osrm
-{
-namespace contractor
+namespace osrm::contractor
 {
 
 void search(ContractorHeap &heap,
             const ContractorGraph &graph,
+            const std::vector<bool> &contractable,
             const unsigned number_of_targets,
             const int node_limit,
             const EdgeWeight weight_limit,
             const NodeID forbidden_node);
 
-} // namespace contractor
-} // namespace osrm
+} // namespace osrm::contractor
 
 #endif // OSRM_CONTRACTOR_DIJKSTRA_HPP

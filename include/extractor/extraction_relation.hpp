@@ -11,9 +11,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace osrm
-{
-namespace extractor
+namespace osrm::extractor
 {
 
 struct ExtractionRelation
@@ -135,7 +133,8 @@ class ExtractionRelationContainer
             (void)res; // prevent unused warning in release
         }
 
-        auto MergeRefMap = [&](RelationRefMap &source, RelationRefMap &target) {
+        auto MergeRefMap = [&](RelationRefMap &source, RelationRefMap &target)
+        {
             for (auto it : source)
             {
                 auto &v = target[it.first];
@@ -153,7 +152,8 @@ class ExtractionRelationContainer
     const RelationIDList &GetRelations(const OsmIDTyped &member_id) const
     {
         auto getFromMap = [this](std::uint64_t id,
-                                 const RelationRefMap &map) -> const RelationIDList & {
+                                 const RelationRefMap &map) -> const RelationIDList &
+        {
             auto it = map.find(id);
             if (it != map.end())
                 return it->second;
@@ -199,7 +199,6 @@ class ExtractionRelationContainer
     RelationRefMap rel_refs;
 };
 
-} // namespace extractor
-} // namespace osrm
+} // namespace osrm::extractor
 
 #endif // EXTRACTION_RELATION_HPP

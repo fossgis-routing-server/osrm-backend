@@ -8,13 +8,10 @@
 #include <iterator>
 #include <numeric>
 #include <random>
-#include <vector>
 
 #include <cstdint>
 
-namespace osrm
-{
-namespace util
+namespace osrm::util
 {
 
 /*
@@ -45,7 +42,7 @@ template <std::size_t MaxNumElements = (1u << 16u)> class XORFastHash
   public:
     XORFastHash()
     {
-        std::mt19937 generator; // impl. defined but deterministic default seed
+        std::mt19937 generator(1); // impl. defined but deterministic default seed
 
         std::iota(begin(table1), end(table1), 0u);
         std::shuffle(begin(table1), end(table1), generator);
@@ -65,7 +62,6 @@ template <std::size_t MaxNumElements = (1u << 16u)> class XORFastHash
         return table1[lsb] ^ table2[msb];
     }
 };
-} // namespace util
-} // namespace osrm
+} // namespace osrm::util
 
 #endif // XOR_FAST_HASH_HPP

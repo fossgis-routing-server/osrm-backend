@@ -2,12 +2,8 @@
 #define FOR_EACH_INDEXED_HPP
 
 #include <iterator>
-#include <numeric>
-#include <utility>
 
-namespace osrm
-{
-namespace util
+namespace osrm::util
 {
 
 template <typename ForwardIterator, typename Function>
@@ -25,7 +21,6 @@ void for_each_indexed(ContainerT &container, Function function)
     for_each_indexed(std::begin(container), std::end(container), function);
 }
 
-} // namespace util
-} // namespace osrm
+} // namespace osrm::util
 
 #endif /* FOR_EACH_INDEXED_HPP */

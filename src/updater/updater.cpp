@@ -18,13 +18,13 @@
 #include "util/mmap_tar.hpp"
 #include "util/opening_hours.hpp"
 #include "util/static_rtree.hpp"
+#include "util/std_hash.hpp"
 #include "util/string_util.hpp"
 #include "util/timezones.hpp"
 #include "util/timing_util.hpp"
 #include "util/typedefs.hpp"
 
 #include <boost/assert.hpp>
-#include <boost/filesystem/fstream.hpp>
 
 #include <tbb/blocked_range.h>
 #include <tbb/concurrent_vector.h>
@@ -35,35 +35,13 @@
 
 #include <algorithm>
 #include <atomic>
-#include <bitset>
 #include <cstdint>
 #include <iterator>
 #include <memory>
 #include <tuple>
 #include <vector>
 
-namespace std
-{
-template <typename T1, typename T2, typename T3> struct hash<std::tuple<T1, T2, T3>>
-{
-    size_t operator()(const std::tuple<T1, T2, T3> &t) const
-    {
-        return hash_val(std::get<0>(t), std::get<1>(t), std::get<2>(t));
-    }
-};
-
-template <typename T1, typename T2> struct hash<std::tuple<T1, T2>>
-{
-    size_t operator()(const std::tuple<T1, T2> &t) const
-    {
-        return hash_val(std::get<0>(t), std::get<1>(t));
-    }
-};
-} // namespace std
-
-namespace osrm
-{
-namespace updater
+namespace osrm::updater
 {
 namespace
 {
@@ -84,7 +62,7 @@ inline SegmentDuration convertToDuration(double speed_in_kmh, double distance_in
     const auto speed_in_ms = speed_in_kmh / 3.6;
     const auto duration = distance_in_meters / speed_in_ms;
     auto segment_duration = std::max<SegmentDuration>(
-        1, boost::numeric_cast<SegmentDuration>(std::round(duration * 10.)));
+        {1}, {boost::numeric_cast<SegmentDuration::value_type>(std::round(duration * 10.))});
     if (segment_duration >= INVALID_SEGMENT_DURATION)
     {
         util::Log(logWARNING) << "Clamping segment duration " << segment_duration << " to "
@@ -114,7 +92,8 @@ void checkWeightsConsistency(
         {
             auto range = segment_data.GetForwardWeights(geometry_id.id);
             // NOLINTNEXTLINE(bugprone-fold-init-type)
-            EdgeWeight weight = std::accumulate(range.begin(), range.end(), EdgeWeight{0});
+            EdgeWeight weight = alias_cast<EdgeWeight>(
+                std::accumulate(range.begin(), range.end(), SegmentWeight{0}));
             if (weight > edge.data.weight)
             {
                 util::Log(logWARNING) << geometry_id.id << " vs " << edge.data.turn_id << ":"
@@ -125,7 +104,8 @@ void checkWeightsConsistency(
         {
             auto range = segment_data.GetReverseWeights(geometry_id.id);
             // NOLINTNEXTLINE(bugprone-fold-init-type)
-            EdgeWeight weight = std::accumulate(range.begin(), range.end(), EdgeWeight{0});
+            EdgeWeight weight = alias_cast<EdgeWeight>(
+                std::accumulate(range.begin(), range.end(), SegmentWeight{0}));
             if (weight > edge.data.weight)
             {
                 util::Log(logWARNING) << geometry_id.id << " vs " << edge.data.turn_id << ":"
@@ -155,10 +135,11 @@ updateSegmentData(const UpdaterConfig &config,
 
     // closure to convert SpeedSource value to weight and count fallbacks to durations
     std::atomic<std::uint32_t> fallbacks_to_duration{0};
-    auto convertToWeight = [&profile_properties,
-                            &fallbacks_to_duration](const SegmentWeight &existing_weight,
-                                                    const SpeedSource &value,
-                                                    double distance_in_meters) {
+    auto convertToWeight =
+        [&profile_properties, &fallbacks_to_duration](const SegmentWeight &existing_weight,
+                                                      const SpeedSource &value,
+                                                      double distance_in_meters)
+    {
         double rate = std::numeric_limits<double>::quiet_NaN();
 
         // if value.rate is not set, we fall back to duration
@@ -185,8 +166,10 @@ updateSegmentData(const UpdaterConfig &config,
 
         const auto weight_multiplier = profile_properties.GetWeightMultiplier();
         const auto weight = distance_in_meters / rate;
-        auto segment_weight = std::max<SegmentWeight>(
-            1, boost::numeric_cast<SegmentWeight>(std::round(weight * weight_multiplier)));
+        auto segment_weight =
+            std::max<SegmentWeight>({1},
+                                    {boost::numeric_cast<SegmentWeight::value_type>(
+                                        std::round(weight * weight_multiplier))});
         if (segment_weight >= INVALID_SEGMENT_WEIGHT)
         {
             util::Log(logWARNING) << "Clamping segment weight " << segment_weight << " to "
@@ -209,96 +192,104 @@ updateSegmentData(const UpdaterConfig &config,
 
     using DirectionalGeometryID = extractor::SegmentDataContainer::DirectionalGeometryID;
     auto range = tbb::blocked_range<DirectionalGeometryID>(0, segment_data.GetNumberOfGeometries());
-    tbb::parallel_for(range, [&](const auto &range) {
-        auto &counters = segment_speeds_counters.local();
-        std::vector<double> segment_lengths;
-        for (auto geometry_id = range.begin(); geometry_id < range.end(); geometry_id++)
+    tbb::parallel_for(
+        range,
+        [&](const auto &range)
         {
-            auto nodes_range = segment_data.GetForwardGeometry(geometry_id);
-
-            segment_lengths.clear();
-            segment_lengths.reserve(nodes_range.size() + 1);
-            util::for_each_pair(nodes_range, [&](const auto &u, const auto &v) {
-                segment_lengths.push_back(util::coordinate_calculation::greatCircleDistance(
-                    coordinates[u], coordinates[v]));
-            });
-
-            auto fwd_weights_range = segment_data.GetForwardWeights(geometry_id);
-            auto fwd_durations_range = segment_data.GetForwardDurations(geometry_id);
-            auto fwd_datasources_range = segment_data.GetForwardDatasources(geometry_id);
-            bool fwd_was_updated = false;
-            for (const auto segment_offset : util::irange<std::size_t>(0, fwd_weights_range.size()))
+            auto &counters = segment_speeds_counters.local();
+            std::vector<double> segment_lengths;
+            for (auto geometry_id = range.begin(); geometry_id < range.end(); geometry_id++)
             {
-                auto u = osm_node_ids[nodes_range[segment_offset]];
-                auto v = osm_node_ids[nodes_range[segment_offset + 1]];
+                auto nodes_range = segment_data.GetForwardGeometry(geometry_id);
 
-                // Self-loops are artifical segments (e.g. traffic light nodes), do not
-                // waste time updating them with traffic data
-                if (u == v)
-                    continue;
+                segment_lengths.clear();
+                segment_lengths.reserve(nodes_range.size() + 1);
+                util::for_each_pair(nodes_range,
+                                    [&](const auto &u, const auto &v)
+                                    {
+                                        segment_lengths.push_back(
+                                            util::coordinate_calculation::greatCircleDistance(
+                                                coordinates[u], coordinates[v]));
+                                    });
 
-                if (auto value = segment_speed_lookup({u, v}))
+                auto fwd_weights_range = segment_data.GetForwardWeights(geometry_id);
+                auto fwd_durations_range = segment_data.GetForwardDurations(geometry_id);
+                auto fwd_datasources_range = segment_data.GetForwardDatasources(geometry_id);
+                bool fwd_was_updated = false;
+                for (const auto segment_offset :
+                     util::irange<std::size_t>(0, fwd_weights_range.size()))
                 {
-                    auto segment_length = segment_lengths[segment_offset];
-                    auto new_duration = convertToDuration(value->speed, segment_length);
-                    auto new_weight =
-                        convertToWeight(fwd_weights_range[segment_offset], *value, segment_length);
-                    fwd_was_updated = true;
+                    auto u = osm_node_ids[nodes_range[segment_offset]];
+                    auto v = osm_node_ids[nodes_range[segment_offset + 1]];
 
-                    fwd_weights_range[segment_offset] = new_weight;
-                    fwd_durations_range[segment_offset] = new_duration;
-                    fwd_datasources_range[segment_offset] = value->source;
-                    counters[value->source] += 1;
+                    // Self-loops are artifical segments (e.g. traffic light nodes), do not
+                    // waste time updating them with traffic data
+                    if (u == v)
+                        continue;
+
+                    if (auto value = segment_speed_lookup({u, v}))
+                    {
+                        auto segment_length = segment_lengths[segment_offset];
+                        auto new_duration = convertToDuration(value->speed, segment_length);
+                        auto new_weight = convertToWeight(
+                            fwd_weights_range[segment_offset], *value, segment_length);
+                        fwd_was_updated = true;
+
+                        fwd_weights_range[segment_offset] = new_weight;
+                        fwd_durations_range[segment_offset] = new_duration;
+                        fwd_datasources_range[segment_offset] = value->source;
+                        counters[value->source] += 1;
+                    }
+                    else
+                    {
+                        counters[LUA_SOURCE] += 1;
+                    }
                 }
-                else
+                if (fwd_was_updated)
+                    updated_segments.push_back(GeometryID{geometry_id, true});
+
+                // In this case we want it oriented from in forward directions
+                auto rev_weights_range =
+                    segment_data.GetReverseWeights(geometry_id) | std::views::reverse;
+                auto rev_durations_range =
+                    segment_data.GetReverseDurations(geometry_id) | std::views::reverse;
+                auto rev_datasources_range =
+                    segment_data.GetReverseDatasources(geometry_id) | std::views::reverse;
+                bool rev_was_updated = false;
+
+                for (const auto segment_offset :
+                     util::irange<std::size_t>(0, rev_weights_range.size()))
                 {
-                    counters[LUA_SOURCE] += 1;
+                    auto u = osm_node_ids[nodes_range[segment_offset]];
+                    auto v = osm_node_ids[nodes_range[segment_offset + 1]];
+
+                    // Self-loops are artifical segments (e.g. traffic light nodes), do not
+                    // waste time updating them with traffic data
+                    if (u == v)
+                        continue;
+
+                    if (auto value = segment_speed_lookup({v, u}))
+                    {
+                        auto segment_length = segment_lengths[segment_offset];
+                        auto new_duration = convertToDuration(value->speed, segment_length);
+                        auto new_weight = convertToWeight(
+                            rev_weights_range[segment_offset], *value, segment_length);
+                        rev_was_updated = true;
+
+                        rev_weights_range[segment_offset] = new_weight;
+                        rev_durations_range[segment_offset] = new_duration;
+                        rev_datasources_range[segment_offset] = value->source;
+                        counters[value->source] += 1;
+                    }
+                    else
+                    {
+                        counters[LUA_SOURCE] += 1;
+                    }
                 }
+                if (rev_was_updated)
+                    updated_segments.push_back(GeometryID{geometry_id, false});
             }
-            if (fwd_was_updated)
-                updated_segments.push_back(GeometryID{geometry_id, true});
-
-            // In this case we want it oriented from in forward directions
-            auto rev_weights_range =
-                boost::adaptors::reverse(segment_data.GetReverseWeights(geometry_id));
-            auto rev_durations_range =
-                boost::adaptors::reverse(segment_data.GetReverseDurations(geometry_id));
-            auto rev_datasources_range =
-                boost::adaptors::reverse(segment_data.GetReverseDatasources(geometry_id));
-            bool rev_was_updated = false;
-
-            for (const auto segment_offset : util::irange<std::size_t>(0, rev_weights_range.size()))
-            {
-                auto u = osm_node_ids[nodes_range[segment_offset]];
-                auto v = osm_node_ids[nodes_range[segment_offset + 1]];
-
-                // Self-loops are artifical segments (e.g. traffic light nodes), do not
-                // waste time updating them with traffic data
-                if (u == v)
-                    continue;
-
-                if (auto value = segment_speed_lookup({v, u}))
-                {
-                    auto segment_length = segment_lengths[segment_offset];
-                    auto new_duration = convertToDuration(value->speed, segment_length);
-                    auto new_weight =
-                        convertToWeight(rev_weights_range[segment_offset], *value, segment_length);
-                    rev_was_updated = true;
-
-                    rev_weights_range[segment_offset] = new_weight;
-                    rev_durations_range[segment_offset] = new_duration;
-                    rev_datasources_range[segment_offset] = value->source;
-                    counters[value->source] += 1;
-                }
-                else
-                {
-                    counters[LUA_SOURCE] += 1;
-                }
-            }
-            if (rev_was_updated)
-                updated_segments.push_back(GeometryID{geometry_id, false});
-        }
-    }); // parallel_for
+        }); // parallel_for
 
     counters_type merged_counters(num_counters, 0);
     for (const auto &counters : segment_speeds_counters)
@@ -344,11 +335,11 @@ updateSegmentData(const UpdaterConfig &config,
             auto new_fwd_durations_range = segment_data.GetForwardDurations(geometry_id);
             auto new_fwd_datasources_range = segment_data.GetForwardDatasources(geometry_id);
             auto new_rev_durations_range =
-                boost::adaptors::reverse(segment_data.GetReverseDurations(geometry_id));
+                segment_data.GetReverseDurations(geometry_id) | std::views::reverse;
             auto new_rev_datasources_range = segment_data.GetReverseDatasources(geometry_id);
             auto old_fwd_durations_range = segment_data_backup->GetForwardDurations(geometry_id);
             auto old_rev_durations_range =
-                boost::adaptors::reverse(segment_data_backup->GetReverseDurations(geometry_id));
+                segment_data_backup->GetReverseDurations(geometry_id) | std::views::reverse;
 
             for (const auto segment_offset :
                  util::irange<std::size_t>(0, new_fwd_durations_range.size()))
@@ -356,18 +347,21 @@ updateSegmentData(const UpdaterConfig &config,
                 if (new_fwd_datasources_range[segment_offset] == LUA_SOURCE)
                     continue;
 
-                if (old_fwd_durations_range[segment_offset] >=
-                    (new_fwd_durations_range[segment_offset] * config.log_edge_updates_factor))
+                SegmentDuration old_fwd_duration = old_fwd_durations_range[segment_offset];
+                SegmentDuration new_fwd_duration = new_fwd_durations_range[segment_offset];
+
+                if (old_fwd_duration >=
+                    to_alias<SegmentDuration>(from_alias<double>(new_fwd_duration) *
+                                              config.log_edge_updates_factor))
                 {
                     auto from = osm_node_ids[nodes_range[segment_offset]];
                     auto to = osm_node_ids[nodes_range[segment_offset + 1]];
-                    util::Log(logWARNING)
-                        << "[weight updates] Edge weight update from "
-                        << old_fwd_durations_range[segment_offset] / 10. << "s to "
-                        << new_fwd_durations_range[segment_offset] / 10. << "s Segment: " << from
-                        << "," << to << " based on "
-                        << config.segment_speed_lookup_paths
-                               [new_fwd_datasources_range[segment_offset] - 1];
+                    util::Log(logWARNING) << "[weight updates] Edge weight update from "
+                                          << from_alias<double>(old_fwd_duration) / 10. << "s to "
+                                          << from_alias<double>(new_fwd_duration) / 10.
+                                          << "s Segment: " << from << "," << to << " based on "
+                                          << config.segment_speed_lookup_paths
+                                                 [new_fwd_datasources_range[segment_offset] - 1];
                 }
             }
 
@@ -377,18 +371,21 @@ updateSegmentData(const UpdaterConfig &config,
                 if (new_rev_datasources_range[segment_offset] == LUA_SOURCE)
                     continue;
 
-                if (old_rev_durations_range[segment_offset] >=
-                    (new_rev_durations_range[segment_offset] * config.log_edge_updates_factor))
+                SegmentDuration old_rev_duration = old_rev_durations_range[segment_offset];
+                SegmentDuration new_rev_duration = new_rev_durations_range[segment_offset];
+
+                if (old_rev_duration >=
+                    to_alias<SegmentDuration>(from_alias<double>(new_rev_duration) *
+                                              config.log_edge_updates_factor))
                 {
                     auto from = osm_node_ids[nodes_range[segment_offset + 1]];
                     auto to = osm_node_ids[nodes_range[segment_offset]];
-                    util::Log(logWARNING)
-                        << "[weight updates] Edge weight update from "
-                        << old_rev_durations_range[segment_offset] / 10. << "s to "
-                        << new_rev_durations_range[segment_offset] / 10. << "s Segment: " << from
-                        << "," << to << " based on "
-                        << config.segment_speed_lookup_paths
-                               [new_rev_datasources_range[segment_offset] - 1];
+                    util::Log(logWARNING) << "[weight updates] Edge weight update from "
+                                          << from_alias<double>(old_rev_duration) / 10. << "s to "
+                                          << from_alias<double>(new_rev_duration) / 10.
+                                          << "s Segment: " << from << "," << to << " based on "
+                                          << config.segment_speed_lookup_paths
+                                                 [new_rev_datasources_range[segment_offset] - 1];
                 }
             }
         }
@@ -409,7 +406,7 @@ void saveDatasourcesNames(const UpdaterConfig &config)
     // for rendering in the debug tiles.
     for (auto const &name : config.segment_speed_lookup_paths)
     {
-        sources.SetSourceName(source, boost::filesystem::path(name).stem().string());
+        sources.SetSourceName(source, std::filesystem::path(name).stem().string());
         source++;
     }
 
@@ -455,18 +452,20 @@ updateTurnPenalties(const UpdaterConfig &config,
 
         if (auto value = turn_penalty_lookup(osm_turn))
         {
-            turn_duration_penalty =
-                boost::numeric_cast<TurnPenalty>(std::round(value->duration * 10.));
-            turn_weight_penalty = boost::numeric_cast<TurnPenalty>(std::round(
-                std::isfinite(value->weight) ? value->weight * weight_multiplier
-                                             : turn_duration_penalty * weight_multiplier / 10.));
+            turn_duration_penalty = {
+                boost::numeric_cast<TurnPenalty::value_type>(std::round(value->duration * 10.))};
+            turn_weight_penalty = {boost::numeric_cast<TurnPenalty::value_type>(
+                std::round(std::isfinite(value->weight)
+                               ? value->weight * weight_multiplier
+                               : from_alias<TurnPenalty::value_type>(turn_duration_penalty) *
+                                     weight_multiplier / 10.))};
 
             turn_duration_penalties[edge_index] = turn_duration_penalty;
             turn_weight_penalties[edge_index] = turn_weight_penalty;
             updated_turns.push_back(edge_index);
         }
 
-        if (turn_weight_penalty < 0)
+        if (turn_weight_penalty < TurnPenalty{0})
         {
             util::Log(logWARNING) << "Negative turn penalty at " << osm_turn.from << ", "
                                   << osm_turn.via << ", " << osm_turn.to << ": turn penalty "
@@ -577,20 +576,22 @@ Updater::LoadAndUpdateEdgeExpandedGraph(std::vector<extractor::EdgeBasedEdge> &e
     if (update_edge_weights || update_turn_penalties || update_conditional_turns)
     {
         tbb::parallel_invoke(
-            [&] {
-                extractor::files::readSegmentData(config.GetPath(".osrm.geometry"), segment_data);
-            },
+            [&]
+            { extractor::files::readSegmentData(config.GetPath(".osrm.geometry"), segment_data); },
             [&] { extractor::files::readNodeData(config.GetPath(".osrm.ebg_nodes"), node_data); },
 
-            [&] {
+            [&]
+            {
                 extractor::files::readTurnWeightPenalty(
                     config.GetPath(".osrm.turn_weight_penalties"), turn_weight_penalties);
             },
-            [&] {
+            [&]
+            {
                 extractor::files::readTurnDurationPenalty(
                     config.GetPath(".osrm.turn_duration_penalties"), turn_duration_penalties);
             },
-            [&] {
+            [&]
+            {
                 extractor::files::readProfileProperties(config.GetPath(".osrm.properties"),
                                                         profile_properties);
             });
@@ -637,7 +638,8 @@ Updater::LoadAndUpdateEdgeExpandedGraph(std::vector<extractor::EdgeBasedEdge> &e
         std::transform(updated_turn_penalties.begin(),
                        updated_turn_penalties.end(),
                        updated_segments.begin() + offset,
-                       [&node_data, &edge_based_edge_list](const std::uint64_t turn_id) {
+                       [&node_data, &edge_based_edge_list](const std::uint64_t turn_id)
+                       {
                            const auto node_id = edge_based_edge_list[turn_id].source;
                            return node_data.GetGeometryID(node_id);
                        });
@@ -662,7 +664,8 @@ Updater::LoadAndUpdateEdgeExpandedGraph(std::vector<extractor::EdgeBasedEdge> &e
         std::transform(updated_turn_penalties.begin(),
                        updated_turn_penalties.end(),
                        updated_segments.begin() + offset,
-                       [&node_data, &edge_based_edge_list](const std::uint64_t turn_id) {
+                       [&node_data, &edge_based_edge_list](const std::uint64_t turn_id)
+                       {
                            const auto node_id = edge_based_edge_list[turn_id].source;
                            return node_data.GetGeometryID(node_id);
                        });
@@ -670,53 +673,56 @@ Updater::LoadAndUpdateEdgeExpandedGraph(std::vector<extractor::EdgeBasedEdge> &e
 
     tbb::parallel_sort(updated_segments.begin(),
                        updated_segments.end(),
-                       [](const GeometryID lhs, const GeometryID rhs) {
-                           return std::tie(lhs.id, lhs.forward) < std::tie(rhs.id, rhs.forward);
-                       });
+                       [](const GeometryID lhs, const GeometryID rhs)
+                       { return std::tie(lhs.id, lhs.forward) < std::tie(rhs.id, rhs.forward); });
 
-    using WeightAndDuration = std::tuple<EdgeWeight, EdgeWeight>;
+    using WeightAndDuration = std::tuple<EdgeWeight, EdgeDuration>;
     const auto compute_new_weight_and_duration =
-        [&](const GeometryID geometry_id) -> WeightAndDuration {
-        EdgeWeight new_weight = 0;
-        EdgeWeight new_duration = 0;
+        [&](const GeometryID geometry_id) -> WeightAndDuration
+    {
+        EdgeWeight new_weight = {0};
+        EdgeDuration new_duration = {0};
         if (geometry_id.forward)
         {
             const auto weights = segment_data.GetForwardWeights(geometry_id.id);
-            for (const auto weight : weights)
+            for (const SegmentWeight weight : weights)
             {
                 if (weight == INVALID_SEGMENT_WEIGHT)
                 {
                     new_weight = INVALID_EDGE_WEIGHT;
                     break;
                 }
-                new_weight += weight;
+                new_weight += alias_cast<EdgeWeight>(weight);
             }
             const auto durations = segment_data.GetForwardDurations(geometry_id.id);
             // NOLINTNEXTLINE(bugprone-fold-init-type)
-            new_duration = std::accumulate(durations.begin(), durations.end(), EdgeWeight{0});
+            new_duration = alias_cast<EdgeDuration>(
+                std::accumulate(durations.begin(), durations.end(), SegmentDuration{0}));
         }
         else
         {
             const auto weights = segment_data.GetReverseWeights(geometry_id.id);
-            for (const auto weight : weights)
+            for (const SegmentWeight weight : weights)
             {
                 if (weight == INVALID_SEGMENT_WEIGHT)
                 {
                     new_weight = INVALID_EDGE_WEIGHT;
                     break;
                 }
-                new_weight += weight;
+                new_weight += alias_cast<EdgeWeight>(SegmentWeight(weight));
             }
             const auto durations = segment_data.GetReverseDurations(geometry_id.id);
             // NOLINTNEXTLINE(bugprone-fold-init-type)
-            new_duration = std::accumulate(durations.begin(), durations.end(), EdgeWeight{0});
+            new_duration = alias_cast<EdgeDuration>(
+                std::accumulate(durations.begin(), durations.end(), SegmentDuration{0}));
         }
         return std::make_tuple(new_weight, new_duration);
     };
 
     std::vector<WeightAndDuration> accumulated_segment_data(updated_segments.size());
     tbb::parallel_for(tbb::blocked_range<std::size_t>(0, updated_segments.size()),
-                      [&](const auto &range) {
+                      [&](const auto &range)
+                      {
                           for (auto index = range.begin(); index < range.end(); ++index)
                           {
                               accumulated_segment_data[index] =
@@ -724,23 +730,23 @@ Updater::LoadAndUpdateEdgeExpandedGraph(std::vector<extractor::EdgeBasedEdge> &e
                           }
                       });
 
-    const auto update_edge = [&](extractor::EdgeBasedEdge &edge) {
+    const auto update_edge = [&](extractor::EdgeBasedEdge &edge)
+    {
         const auto node_id = edge.source;
         const auto geometry_id = node_data.GetGeometryID(node_id);
-        auto updated_iter = std::lower_bound(updated_segments.begin(),
-                                             updated_segments.end(),
-                                             geometry_id,
-                                             [](const GeometryID lhs, const GeometryID rhs) {
-                                                 return std::tie(lhs.id, lhs.forward) <
-                                                        std::tie(rhs.id, rhs.forward);
-                                             });
+        auto updated_iter = std::lower_bound(
+            updated_segments.begin(),
+            updated_segments.end(),
+            geometry_id,
+            [](const GeometryID lhs, const GeometryID rhs)
+            { return std::tie(lhs.id, lhs.forward) < std::tie(rhs.id, rhs.forward); });
         if (updated_iter != updated_segments.end() && updated_iter->id == geometry_id.id &&
             updated_iter->forward == geometry_id.forward)
         {
             // Find a segment with zero speed and simultaneously compute the new edge
             // weight
             EdgeWeight new_weight;
-            EdgeWeight new_duration;
+            EdgeDuration new_duration;
             std::tie(new_weight, new_duration) =
                 accumulated_segment_data[updated_iter - updated_segments.begin()];
 
@@ -749,7 +755,9 @@ Updater::LoadAndUpdateEdgeExpandedGraph(std::vector<extractor::EdgeBasedEdge> &e
             // but we should always assign the same value here.
             BOOST_ASSERT(edge.source < node_weights.size());
             node_weights[edge.source] =
-                node_weights[edge.source] & 0x80000000 ? new_weight | 0x80000000 : new_weight;
+                from_alias<EdgeWeight::value_type>(node_weights[edge.source]) & 0x80000000
+                    ? new_weight | EdgeWeight{static_cast<EdgeWeight::value_type>(0x80000000)}
+                    : new_weight;
             node_durations[edge.source] = new_duration;
 
             // We found a zero-speed edge, so we'll skip this whole edge-based-edge
@@ -765,15 +773,15 @@ Updater::LoadAndUpdateEdgeExpandedGraph(std::vector<extractor::EdgeBasedEdge> &e
             auto turn_weight_penalty = turn_weight_penalties[edge.data.turn_id];
             auto turn_duration_penalty = turn_duration_penalties[edge.data.turn_id];
             const auto num_nodes = segment_data.GetForwardGeometry(geometry_id.id).size();
-            const auto weight_min_value = static_cast<EdgeWeight>(num_nodes);
-            if (turn_weight_penalty + new_weight < weight_min_value)
+            const auto weight_min_value = to_alias<EdgeWeight>(num_nodes);
+            if (alias_cast<EdgeWeight>(turn_weight_penalty) + new_weight < weight_min_value)
             {
-                if (turn_weight_penalty < 0)
+                if (turn_weight_penalty < TurnPenalty{0})
                 {
                     util::Log(logWARNING)
                         << "turn penalty " << turn_weight_penalty
                         << " is too negative: clamping turn weight to " << weight_min_value;
-                    turn_weight_penalty = weight_min_value - new_weight;
+                    turn_weight_penalty = alias_cast<TurnPenalty>(weight_min_value - new_weight);
                     turn_weight_penalties[edge.data.turn_id] = turn_weight_penalty;
                 }
                 else
@@ -783,15 +791,17 @@ Updater::LoadAndUpdateEdgeExpandedGraph(std::vector<extractor::EdgeBasedEdge> &e
             }
 
             // Update edge weight
-            edge.data.weight = new_weight + turn_weight_penalty;
-            edge.data.duration = new_duration + turn_duration_penalty;
+            edge.data.weight = new_weight + alias_cast<EdgeWeight>(turn_weight_penalty);
+            edge.data.duration = from_alias<EdgeDuration::value_type>(
+                new_duration + alias_cast<EdgeDuration>(turn_duration_penalty));
         }
     };
 
     if (updated_segments.size() > 0)
     {
         tbb::parallel_for(tbb::blocked_range<std::size_t>(0, edge_based_edge_list.size()),
-                          [&](const auto &range) {
+                          [&](const auto &range)
+                          {
                               for (auto index = range.begin(); index < range.end(); ++index)
                               {
                                   update_edge(edge_based_edge_list[index]);
@@ -802,11 +812,13 @@ Updater::LoadAndUpdateEdgeExpandedGraph(std::vector<extractor::EdgeBasedEdge> &e
     if (update_turn_penalties || update_conditional_turns)
     {
         tbb::parallel_invoke(
-            [&] {
+            [&]
+            {
                 extractor::files::writeTurnWeightPenalty(
                     config.GetPath(".osrm.turn_weight_penalties"), turn_weight_penalties);
             },
-            [&] {
+            [&]
+            {
                 extractor::files::writeTurnDurationPenalty(
                     config.GetPath(".osrm.turn_duration_penalties"), turn_duration_penalties);
             });
@@ -826,5 +838,4 @@ Updater::LoadAndUpdateEdgeExpandedGraph(std::vector<extractor::EdgeBasedEdge> &e
     util::Log() << "Done reading edges in " << TIMER_MSEC(load_edges) << "ms.";
     return number_of_edge_based_nodes;
 }
-} // namespace updater
-} // namespace osrm
+} // namespace osrm::updater

@@ -9,20 +9,12 @@
 #include "engine/hint.hpp"
 #include "util/coordinate_calculation.hpp"
 
-#include <boost/algorithm/string/join.hpp>
-#include <boost/assert.hpp>
-#include <boost/range/adaptor/transformed.hpp>
-#include <boost/range/algorithm/transform.hpp>
-
-#include <boost/range/adaptor/filtered.hpp>
 #include <memory>
+#include <ranges>
+#include <sstream>
 #include <vector>
 
-namespace osrm
-{
-namespace engine
-{
-namespace api
+namespace osrm::engine::api
 {
 
 static const constexpr char *INTERSECTION_DELIMITER = " / ";
@@ -44,29 +36,28 @@ class BaseAPI
         util::json::Array waypoints;
         waypoints.values.resize(parameters.coordinates.size());
 
-        boost::range::transform(
-            waypoint_candidates,
-            waypoints.values.begin(),
-            [this](const PhantomNodeCandidates &candidates) { return MakeWaypoint(candidates); });
+        std::ranges::transform(waypoint_candidates,
+                               waypoints.values.begin(),
+                               [this](const PhantomNodeCandidates &candidates)
+                               { return MakeWaypoint(candidates); });
         return waypoints;
     }
 
-    // FIXME: gcc 4.9 does not like MakeWaypoints to be protected
-    // protected:
+  protected:
     util::json::Object MakeWaypoint(const PhantomNodeCandidates &candidates) const
     {
         // TODO: check forward/reverse
         const auto toName = [this](const auto &phantom) {
-            return facade.GetNameForID(facade.GetNameIndex(phantom.forward_segment_id.id))
-                .to_string();
+            return std::string(
+                facade.GetNameForID(facade.GetNameIndex(phantom.forward_segment_id.id)));
         };
         const auto noEmpty = [](const auto &name) { return !name.empty(); };
 
         // At an intersection we may have multiple phantom node candidates.
         // Combine them to represent the waypoint name.
-        std::string waypoint_name = boost::algorithm::join(
-            candidates | boost::adaptors::transformed(toName) | boost::adaptors::filtered(noEmpty),
-            INTERSECTION_DELIMITER);
+        std::string waypoint_name =
+            join(candidates | std::views::transform(toName) | std::views::filter(noEmpty),
+                 INTERSECTION_DELIMITER);
 
         const auto &snapped_location = candidatesSnappedLocation(candidates);
         const auto &input_location = candidatesInputLocation(candidates);
@@ -108,14 +99,11 @@ class BaseAPI
         std::transform(waypoint_candidates.begin(),
                        waypoint_candidates.end(),
                        waypoints.begin(),
-                       [this, builder](const PhantomNodeCandidates &candidates) {
-                           return MakeWaypoint(builder, candidates)->Finish();
-                       });
+                       [this, builder](const PhantomNodeCandidates &candidates)
+                       { return MakeWaypoint(builder, candidates)->Finish(); });
         return builder->CreateVector(waypoints);
     }
 
-    // FIXME: gcc 4.9 does not like MakeWaypoints to be protected
-    // protected:
     std::unique_ptr<fbresult::WaypointBuilder>
     MakeWaypoint(flatbuffers::FlatBufferBuilder *builder,
                  const PhantomNodeCandidates &candidates) const
@@ -128,16 +116,16 @@ class BaseAPI
             static_cast<float>(static_cast<double>(util::toFloating(snapped_location.lat))));
 
         const auto toName = [this](const auto &phantom) {
-            return facade.GetNameForID(facade.GetNameIndex(phantom.forward_segment_id.id))
-                .to_string();
+            return std::string(
+                facade.GetNameForID(facade.GetNameIndex(phantom.forward_segment_id.id)));
         };
         const auto noEmpty = [](const auto &name) { return !name.empty(); };
 
         // At an intersection we may have multiple phantom node candidates.
         // Combine them to represent the waypoint name.
-        std::string waypoint_name = boost::algorithm::join(
-            candidates | boost::adaptors::transformed(toName) | boost::adaptors::filtered(noEmpty),
-            INTERSECTION_DELIMITER);
+        std::string waypoint_name =
+            join(candidates | std::views::transform(toName) | std::views::filter(noEmpty),
+                 INTERSECTION_DELIMITER);
         auto name_string = builder->CreateString(waypoint_name);
 
         flatbuffers::Offset<flatbuffers::String> hint_string;
@@ -168,10 +156,27 @@ class BaseAPI
 
     const datafacade::BaseDataFacade &facade;
     const BaseParameters &parameters;
+
+  private:
+    // Helper join function using std
+    template <typename Range> std::string join(Range &&range, const std::string &delimiter) const
+    {
+        std::ostringstream result;
+        auto it = std::begin(range);
+        const auto end = std::end(range);
+
+        if (it != end)
+        {
+            result << *it++;
+            while (it != end)
+            {
+                result << delimiter << *it++;
+            }
+        }
+        return result.str();
+    }
 };
 
-} // namespace api
-} // namespace engine
-} // namespace osrm
+} // namespace osrm::engine::api
 
 #endif

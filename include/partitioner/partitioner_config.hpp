@@ -1,16 +1,11 @@
 #ifndef OSRM_PARTITIONER_CONFIG_HPP
 #define OSRM_PARTITIONER_CONFIG_HPP
 
-#include <boost/filesystem/path.hpp>
-
-#include <array>
-#include <string>
+#include <filesystem>
 
 #include "storage/io_config.hpp"
 
-namespace osrm
-{
-namespace partitioner
+namespace osrm::partitioner
 {
 
 struct PartitionerConfig final : storage::IOConfig
@@ -31,7 +26,7 @@ struct PartitionerConfig final : storage::IOConfig
     {
     }
 
-    void UseDefaultOutputNames(const boost::filesystem::path &base)
+    void UseDefaultOutputNames(const std::filesystem::path &base)
     {
         IOConfig::UseDefaultOutputNames(base);
     }
@@ -44,7 +39,6 @@ struct PartitionerConfig final : storage::IOConfig
     std::size_t small_component_size;
     std::vector<std::size_t> max_cell_sizes;
 };
-} // namespace partitioner
-} // namespace osrm
+} // namespace osrm::partitioner
 
 #endif // OSRM_PARTITIONER_CONFIG_HPP

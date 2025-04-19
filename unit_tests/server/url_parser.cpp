@@ -1,13 +1,7 @@
 #include "server/api/url_parser.hpp"
 
-#include <fstream>
-
 // needed for BOOST_CHECK_EQUAL
-namespace osrm
-{
-namespace server
-{
-namespace api
+namespace osrm::server::api
 {
 std::ostream &operator<<(std::ostream &out, const osrm::server::api::ParsedURL &url)
 {
@@ -15,9 +9,7 @@ std::ostream &operator<<(std::ostream &out, const osrm::server::api::ParsedURL &
 
     return out;
 }
-} // namespace api
-} // namespace server
-} // namespace osrm
+} // namespace osrm::server::api
 
 #include <boost/test/test_tools.hpp>
 #include <boost/test/unit_test.hpp>

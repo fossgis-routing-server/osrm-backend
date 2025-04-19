@@ -7,18 +7,14 @@
 #include "engine/hint.hpp"
 #include "engine/polyline_compressor.hpp"
 
-#include <boost/optional.hpp>
-#include <boost/spirit/include/phoenix.hpp>
+#include <boost/phoenix.hpp>
 #include <boost/spirit/include/qi.hpp>
+#include <optional>
 
 #include <limits>
 #include <string>
 
-namespace osrm
-{
-namespace server
-{
-namespace api
+namespace osrm::server::api
 {
 
 namespace
@@ -87,28 +83,39 @@ struct BaseParametersGrammar : boost::spirit::qi::grammar<Iterator, Signature>
                 std::transform(hint_strings.begin(),
                                hint_strings.end(),
                                location_hints.begin(),
-                               [](const auto &hint_string) {
-                                   return engine::SegmentHint::FromBase64(hint_string);
-                               });
+                               [](const auto &hint_string)
+                               { return engine::SegmentHint::FromBase64(hint_string); });
                 base_parameters.hints.push_back(engine::Hint{std::move(location_hints)});
             }
             else
             {
-                base_parameters.hints.emplace_back(boost::none);
+                base_parameters.hints.emplace_back(std::nullopt);
             }
         };
 
         const auto add_bearing =
             [](engine::api::BaseParameters &base_parameters,
-               boost::optional<boost::fusion::vector2<short, short>> bearing_range) {
-                boost::optional<engine::Bearing> bearing;
-                if (bearing_range)
-                {
-                    bearing = engine::Bearing{boost::fusion::at_c<0>(*bearing_range),
-                                              boost::fusion::at_c<1>(*bearing_range)};
-                }
-                base_parameters.bearings.push_back(std::move(bearing));
-            };
+               boost::optional<boost::fusion::vector2<short, short>> bearing_range)
+        {
+            std::optional<engine::Bearing> bearing;
+            if (bearing_range)
+            {
+                bearing = engine::Bearing{boost::fusion::at_c<0>(*bearing_range),
+                                          boost::fusion::at_c<1>(*bearing_range)};
+            }
+            base_parameters.bearings.push_back(bearing);
+        };
+
+        const auto add_approach = [](engine::api::BaseParameters &base_parameters,
+                                     boost::optional<osrm::engine::Approach> approach) {
+            base_parameters.approaches.push_back(approach ? std::make_optional(*approach)
+                                                          : std::nullopt);
+        };
+
+        const auto add_radius = [](engine::api::BaseParameters &base_parameters,
+                                   boost::optional<double> radius) {
+            base_parameters.radiuses.push_back(radius ? std::make_optional(*radius) : std::nullopt);
+        };
 
         polyline_chars = qi::char_("a-zA-Z0-9_.--[]{}@?|\\%~`^");
         base64_char = qi::char_("a-zA-Z0-9--_=");
@@ -124,7 +131,8 @@ struct BaseParametersGrammar : boost::spirit::qi::grammar<Iterator, Signature>
 
         location_rule = (double_ > qi::lit(',') >
                          double_)[qi::_val = ph::bind(
-                                      [](double lon, double lat) {
+                                      [](double lon, double lat)
+                                      {
                                           return util::Coordinate(
                                               util::toFixed(util::UnsafeFloatLongitude{lon}),
                                               util::toFixed(util::UnsafeFloatLatitude{lat}));
@@ -132,27 +140,25 @@ struct BaseParametersGrammar : boost::spirit::qi::grammar<Iterator, Signature>
                                       qi::_1,
                                       qi::_2)];
 
-        polyline_rule = qi::as_string[qi::lit("polyline(") > +polyline_chars > ')']
-                                     [qi::_val = ph::bind(
-                                          [](const std::string &polyline) {
-                                              return engine::decodePolyline(polyline);
-                                          },
-                                          qi::_1)];
+        polyline_rule =
+            qi::as_string[qi::lit("polyline(") > +polyline_chars > ')']
+                         [qi::_val = ph::bind([](const std::string &polyline)
+                                              { return engine::decodePolyline(polyline); },
+                                              qi::_1)];
 
-        polyline6_rule = qi::as_string[qi::lit("polyline6(") > +polyline_chars > ')']
-                                      [qi::_val = ph::bind(
-                                           [](const std::string &polyline) {
-                                               return engine::decodePolyline<1000000>(polyline);
-                                           },
-                                           qi::_1)];
+        polyline6_rule =
+            qi::as_string[qi::lit("polyline6(") > +polyline_chars > ')']
+                         [qi::_val = ph::bind([](const std::string &polyline)
+                                              { return engine::decodePolyline<1000000>(polyline); },
+                                              qi::_1)];
 
         query_rule =
             ((location_rule % ';') | polyline_rule |
              polyline6_rule)[ph::bind(&engine::api::BaseParameters::coordinates, qi::_r1) = qi::_1];
 
-        radiuses_rule = qi::lit("radiuses=") >
-                        (-(qi::double_ | unlimited_rule) %
-                         ';')[ph::bind(&engine::api::BaseParameters::radiuses, qi::_r1) = qi::_1];
+        radiuses_rule =
+            qi::lit("radiuses=") >
+            (-(qi::double_ | unlimited_rule))[ph::bind(add_radius, qi::_r1, qi::_1)] % ';';
 
         hints_rule =
             qi::lit("hints=") >
@@ -172,11 +178,11 @@ struct BaseParametersGrammar : boost::spirit::qi::grammar<Iterator, Signature>
             qi::lit("bearings=") >
             (-(qi::short_ > ',' > qi::short_))[ph::bind(add_bearing, qi::_r1, qi::_1)] % ';';
 
-        approach_type.add("unrestricted", engine::Approach::UNRESTRICTED)("curb",
-                                                                          engine::Approach::CURB);
+        approach_type.add("unrestricted", engine::Approach::UNRESTRICTED)(
+            "curb", engine::Approach::CURB)("opposite", engine::Approach::OPPOSITE);
+
         approach_rule = qi::lit("approaches=") >
-                        (-approach_type %
-                         ';')[ph::bind(&engine::api::BaseParameters::approaches, qi::_r1) = qi::_1];
+                        (-approach_type)[ph::bind(add_approach, qi::_r1, qi::_1)] % ';';
 
         snapping_type.add("default", engine::api::BaseParameters::SnappingType::Default)(
             "any", engine::api::BaseParameters::SnappingType::Any);
@@ -237,8 +243,6 @@ struct BaseParametersGrammar : boost::spirit::qi::grammar<Iterator, Signature>
     qi::symbols<char, engine::Approach> approach_type;
     qi::symbols<char, engine::api::BaseParameters::SnappingType> snapping_type;
 };
-} // namespace api
-} // namespace server
-} // namespace osrm
+} // namespace osrm::server::api
 
 #endif

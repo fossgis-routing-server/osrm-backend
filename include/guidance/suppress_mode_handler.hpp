@@ -8,9 +8,7 @@
 
 #include "util/node_based_graph.hpp"
 
-namespace osrm
-{
-namespace guidance
+namespace osrm::guidance
 {
 
 // Suppresses instructions for certain modes.
@@ -24,7 +22,7 @@ class SuppressModeHandler final : public IntersectionHandler
                         const std::vector<util::Coordinate> &coordinates,
                         const extractor::CompressedEdgeContainer &compressed_geometries,
                         const extractor::RestrictionMap &node_restriction_map,
-                        const std::unordered_set<NodeID> &barrier_nodes,
+                        const extractor::ObstacleMap &obstacle_nodes,
                         const extractor::TurnLanesIndexedArray &turn_lanes_data,
                         const extractor::NameTable &name_table,
                         const extractor::SuffixTable &street_name_suffix_table);
@@ -40,7 +38,6 @@ class SuppressModeHandler final : public IntersectionHandler
                             Intersection intersection) const override final;
 };
 
-} // namespace guidance
-} // namespace osrm
+} // namespace osrm::guidance
 
 #endif /* OSRM_GUIDANCE_SUPPRESS_MODE_HANDLER_HPP_ */

@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 
 import json
 import sys
@@ -7,7 +7,7 @@ import re
 WHITELIST = set(["mph"])
 
 if len(sys.argv) < 3:
-    print "Not enough arguments.\nUsage: " + sys.argv[0] + " taginfo.json profile.lua"
+    print("Not enough arguments.\nUsage: " + sys.argv[0] + " taginfo.json profile.lua")
     sys.exit(1)
 
 taginfo_path = sys.argv[1]
@@ -19,10 +19,12 @@ with open(taginfo_path) as f:
 
 valid_strings = [t["key"] for t in taginfo["tags"]]
 valid_strings += [t["value"] for t in taginfo["tags"] if "value" in t]
-valid_strings += [t["value"].lower() for t in taginfo["tags"] if "value" in t] # lower is for max speed
+valid_strings += [
+    t["value"].lower() for t in taginfo["tags"] if "value" in t
+]  # lower is for max speed
 valid_strings = set(valid_strings)
 
-string_regxp = re.compile("\"([\d\w\_:]+)\"")
+string_regxp = re.compile(r"\"([\d\w\_:]+)\"")
 
 profile = None
 with open(profile_path) as f:
@@ -40,7 +42,7 @@ for n, line in enumerate(profile):
     errors = []
     for token in tokens:
         if token not in WHITELIST and token not in valid_strings:
-            idx = line.find("\""+token+"\"")
+            idx = line.find('"' + token + '"')
             errors.append((idx, token))
     errors = sorted(errors)
     n_errors += len(errors)
@@ -49,7 +51,7 @@ for n, line in enumerate(profile):
         offset = len(prefix)
         for idx, token in errors:
             sys.stdout.write(prefix + line)
-            marker = " "*(idx+offset) + "~"*(len(token)+2)
+            marker = " " * (idx + offset) + "~" * (len(token) + 2)
             print(marker)
 
 if n_errors > 0:

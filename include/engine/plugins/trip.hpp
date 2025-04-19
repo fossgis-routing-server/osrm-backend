@@ -8,21 +8,12 @@
 
 #include "util/json_container.hpp"
 
-#include <boost/assert.hpp>
-
 #include <algorithm>
 #include <cstdlib>
 #include <iterator>
-#include <memory>
-#include <string>
-#include <utility>
 #include <vector>
 
-namespace osrm
-{
-namespace engine
-{
-namespace plugins
+namespace osrm::engine::plugins
 {
 
 class TripPlugin final : public BasePlugin
@@ -36,14 +27,15 @@ class TripPlugin final : public BasePlugin
                                      const bool roundtrip) const;
 
   public:
-    explicit TripPlugin(const int max_locations_trip_) : max_locations_trip(max_locations_trip_) {}
+    explicit TripPlugin(const int max_locations_trip_, std::optional<double> default_radius)
+        : BasePlugin(default_radius), max_locations_trip(max_locations_trip_)
+    {
+    }
 
     Status HandleRequest(const RoutingAlgorithmsInterface &algorithms,
                          const api::TripParameters &parameters,
                          osrm::engine::api::ResultT &json_result) const;
 };
-} // namespace plugins
-} // namespace engine
-} // namespace osrm
+} // namespace osrm::engine::plugins
 
 #endif // TRIP_HPP

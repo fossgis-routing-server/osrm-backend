@@ -15,9 +15,7 @@
 
 #include <cstdint>
 
-namespace osrm
-{
-namespace guidance
+namespace osrm::guidance
 {
 
 // Unconditionally runs over all intersections and gathers statistics for
@@ -30,7 +28,7 @@ class StatisticsHandler final : public IntersectionHandler
                       const std::vector<util::Coordinate> &coordinates,
                       const extractor::CompressedEdgeContainer &compressed_geometries,
                       const extractor::RestrictionMap &node_restriction_map,
-                      const std::unordered_set<NodeID> &barrier_nodes,
+                      const extractor::ObstacleMap &obstacle_nodes,
                       const extractor::TurnLanesIndexedArray &turn_lanes_data,
                       const extractor::NameTable &name_table,
                       const extractor::SuffixTable &street_name_suffix_table)
@@ -39,7 +37,7 @@ class StatisticsHandler final : public IntersectionHandler
                               coordinates,
                               compressed_geometries,
                               node_restriction_map,
-                              barrier_nodes,
+                              obstacle_nodes,
                               turn_lanes_data,
                               name_table,
                               street_name_suffix_table)
@@ -107,7 +105,6 @@ class StatisticsHandler final : public IntersectionHandler
     mutable std::map<DirectionModifier::Enum, std::uint64_t> modifier_hist;
 };
 
-} // namespace guidance
-} // namespace osrm
+} // namespace osrm::guidance
 
 #endif // OSRM_GUIDANCE_VALIDATION_HANDLER_HPP_

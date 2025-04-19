@@ -3,9 +3,7 @@
 
 #include "guidance/intersection_handler.hpp"
 
-namespace osrm
-{
-namespace guidance
+namespace osrm::guidance
 {
 
 // Intersection handlers deal with all issues related to intersections.
@@ -17,7 +15,7 @@ class DrivewayHandler final : public IntersectionHandler
                     const std::vector<util::Coordinate> &coordinates,
                     const extractor::CompressedEdgeContainer &compressed_geometries,
                     const extractor::RestrictionMap &node_restriction_map,
-                    const std::unordered_set<NodeID> &barrier_nodes,
+                    const extractor::ObstacleMap &obstacle_nodes,
                     const extractor::TurnLanesIndexedArray &turn_lanes_data,
                     const extractor::NameTable &name_table,
                     const extractor::SuffixTable &street_name_suffix_table);
@@ -35,7 +33,6 @@ class DrivewayHandler final : public IntersectionHandler
                             Intersection intersection) const override final;
 };
 
-} // namespace guidance
-} // namespace osrm
+} // namespace osrm::guidance
 
 #endif /* OSRM_GUIDANCE_DRIVEWAY_HANDLER_HPP */

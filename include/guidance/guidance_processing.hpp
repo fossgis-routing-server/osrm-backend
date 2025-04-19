@@ -7,6 +7,7 @@
 #include "extractor/name_table.hpp"
 #include "extractor/node_data_container.hpp"
 #include "extractor/node_restriction_map.hpp"
+#include "extractor/obstacles.hpp"
 #include "extractor/suffix_table.hpp"
 #include "extractor/turn_lane_types.hpp"
 #include "extractor/way_restriction_map.hpp"
@@ -19,9 +20,7 @@
 
 #include <unordered_set>
 
-namespace osrm
-{
-namespace guidance
+namespace osrm::guidance
 {
 using BearingClassesVector = std::vector<BearingClassID>;
 using BearingClassesMap = util::ConcurrentIDMap<util::guidance::BearingClass, BearingClassID>;
@@ -31,7 +30,7 @@ void annotateTurns(const util::NodeBasedDynamicGraph &node_based_graph,
                    const extractor::EdgeBasedNodeDataContainer &edge_based_node_container,
                    const std::vector<util::Coordinate> &node_coordinates,
                    const extractor::CompressedEdgeContainer &compressed_edge_container,
-                   const std::unordered_set<NodeID> &barrier_nodes,
+                   const extractor::ObstacleMap &obstacle_nodes,
                    const extractor::RestrictionMap &node_restriction_map,
                    const extractor::WayRestrictionMap &way_restriction_map,
                    const extractor::NameTable &name_table,
@@ -45,7 +44,6 @@ void annotateTurns(const util::NodeBasedDynamicGraph &node_based_graph,
                    EntryClassesMap &entry_class_hash,
                    std::uint32_t &connectivity_checksum);
 
-} // namespace guidance
-} // namespace osrm
+} // namespace osrm::guidance
 
 #endif

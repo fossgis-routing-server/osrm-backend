@@ -8,9 +8,7 @@
 #include "osrm/tile_parameters.hpp"
 #include "osrm/trip_parameters.hpp"
 
-#include <exception>
-#include <sstream>
-#include <stdexcept>
+#include <napi.h>
 #include <type_traits>
 #include <utility>
 
@@ -21,35 +19,25 @@
 
 namespace node_osrm
 {
-
-Engine::Engine(osrm::EngineConfig &config) : Base(), this_(std::make_shared<osrm::OSRM>(config)) {}
-
-Nan::Persistent<v8::Function> &Engine::constructor()
+Napi::Object Engine::Init(Napi::Env env, Napi::Object exports)
 {
-    static Nan::Persistent<v8::Function> init;
-    return init;
-}
+    Napi::Function func = DefineClass(env,
+                                      "OSRM",
+                                      {
+                                          InstanceMethod("route", &Engine::route),
+                                          InstanceMethod("nearest", &Engine::nearest),
+                                          InstanceMethod("table", &Engine::table),
+                                          InstanceMethod("tile", &Engine::tile),
+                                          InstanceMethod("match", &Engine::match),
+                                          InstanceMethod("trip", &Engine::trip),
+                                      });
 
-NAN_MODULE_INIT(Engine::Init)
-{
-    const auto whoami = Nan::New("OSRM").ToLocalChecked();
+    Napi::FunctionReference *constructor = new Napi::FunctionReference();
+    *constructor = Napi::Persistent(func);
+    env.SetInstanceData(constructor);
 
-    auto fnTp = Nan::New<v8::FunctionTemplate>(New);
-    fnTp->InstanceTemplate()->SetInternalFieldCount(1);
-    fnTp->SetClassName(whoami);
-
-    SetPrototypeMethod(fnTp, "route", route);
-    SetPrototypeMethod(fnTp, "nearest", nearest);
-    SetPrototypeMethod(fnTp, "table", table);
-    SetPrototypeMethod(fnTp, "tile", tile);
-    SetPrototypeMethod(fnTp, "match", match);
-    SetPrototypeMethod(fnTp, "trip", trip);
-
-    const auto fn = Nan::GetFunction(fnTp).ToLocalChecked();
-
-    constructor().Reset(fn);
-
-    Nan::Set(target, whoami, fn);
+    exports.Set("OSRM", func);
+    return exports;
 }
 
 // clang-format off
@@ -71,7 +59,7 @@ NAN_MODULE_INIT(Engine::Init)
  * ```
  *
  * @param {Object|String} [options={shared_memory: true}] Options for creating an OSRM object or string to the `.osrm` file.
- * @param {String} [options.algorithm] The algorithm to use for routing. Can be 'CH', 'CoreCH' or 'MLD'. Default is 'CH'.
+ * @param {String} [options.algorithm] The algorithm to use for routing. Can be 'CH', or 'MLD'. Default is 'CH'.
  *        Make sure you prepared the dataset with the correct toolchain.
  * @param {Boolean} [options.shared_memory] Connects to the persistent shared memory datastore.
  *        This requires you to run `osrm-datastore` prior to creating an `OSRM` object.
@@ -81,6 +69,7 @@ NAN_MODULE_INIT(Engine::Init)
  *        Old behaviour: Path to a file on disk to store the memory using mmap.  Current behaviour: setting this value is the same as setting `mmap_memory: true`.
  * @param {Boolean} [options.mmap_memory] Map on-disk files to virtual memory addresses (mmap), rather than loading into RAM.
  * @param {String} [options.path] The path to the `.osrm` files. This is mutually exclusive with setting {options.shared_memory} to true.
+ * @param {Array}  [options.disable_feature_dataset] Disables a feature dataset from being loaded into memory if not needed. Options: `ROUTE_STEPS`, `ROUTE_GEOMETRY`.
  * @param {Number} [options.max_locations_trip] Max. locations supported in trip query (default: unlimited).
  * @param {Number} [options.max_locations_viaroute] Max. locations supported in viaroute query (default: unlimited).
  * @param {Number} [options.max_locations_distance_table] Max. locations supported in distance table query (default: unlimited).
@@ -88,40 +77,31 @@ NAN_MODULE_INIT(Engine::Init)
  * @param {Number} [options.max_radius_map_matching] Max. radius size supported in map matching query (default: 5).
  * @param {Number} [options.max_results_nearest] Max. results supported in nearest query (default: unlimited).
  * @param {Number} [options.max_alternatives] Max. number of alternatives supported in alternative routes query (default: 3).
+ * @param {Number} [options.default_radius] Default radius for queries (default: unlimited).
  *
  * @class OSRM
  *
  */
 // clang-format on
-NAN_METHOD(Engine::New)
+Engine::Engine(const Napi::CallbackInfo &info) : Napi::ObjectWrap<Engine>(info)
 {
-    if (info.IsConstructCall())
+
+    try
     {
-        try
-        {
-            auto config = argumentsToEngineConfig(info);
-            if (!config)
-                return;
+        auto config = argumentsToEngineConfig(info);
+        if (!config)
+            return;
 
-            auto *const self = new Engine(*config);
-            self->Wrap(info.This());
-        }
-        catch (const std::exception &ex)
-        {
-            return Nan::ThrowTypeError(ex.what());
-        }
-
-        info.GetReturnValue().Set(info.This());
+        this_ = std::make_shared<osrm::OSRM>(*config);
     }
-    else
+    catch (const std::exception &ex)
     {
-        return Nan::ThrowTypeError(
-            "Cannot call constructor as function, you need to use 'new' keyword");
+        ThrowTypeError(info.Env(), ex.what());
     }
 }
 
 template <typename ParameterParser, typename ServiceMemFn>
-inline void async(const Nan::FunctionCallbackInfo<v8::Value> &info,
+inline void async(const Napi::CallbackInfo &info,
                   ParameterParser argsToParams,
                   ServiceMemFn service,
                   bool requires_multiple_coordinates)
@@ -133,22 +113,21 @@ inline void async(const Nan::FunctionCallbackInfo<v8::Value> &info,
 
     BOOST_ASSERT(params->IsValid());
 
-    if (!info[info.Length() - 1]->IsFunction())
-        return Nan::ThrowTypeError("last argument must be a callback function");
+    if (!info[info.Length() - 1].IsFunction())
+        return ThrowTypeError(info.Env(), "last argument must be a callback function");
 
-    auto *const self = Nan::ObjectWrap::Unwrap<Engine>(info.Holder());
+    auto *const self = Napi::ObjectWrap<Engine>::Unwrap(info.This().As<Napi::Object>());
     using ParamPtr = decltype(params);
 
-    struct Worker final : Nan::AsyncWorker
+    struct Worker final : Napi::AsyncWorker
     {
         Worker(std::shared_ptr<osrm::OSRM> osrm_,
                ParamPtr params_,
                ServiceMemFn service,
-               Nan::Callback *callback,
+               Napi::Function callback,
                PluginParameters pluginParams_)
-            : Nan::AsyncWorker(callback, "osrm:async"), osrm{std::move(osrm_)},
-              service{std::move(service)}, params{std::move(params_)}, pluginParams{
-                                                                           std::move(pluginParams_)}
+            : Napi::AsyncWorker(callback), osrm{std::move(osrm_)}, service{std::move(service)},
+              params{std::move(params_)}, pluginParams{std::move(pluginParams_)}
         {
         }
 
@@ -163,7 +142,7 @@ inline void async(const Nan::FunctionCallbackInfo<v8::Value> &info,
                 osrm::engine::api::ResultT r;
                 r = osrm::util::json::Object();
                 const auto status = ((*osrm).*(service))(*params, r);
-                auto &json_result = r.get<osrm::json::Object>();
+                auto &json_result = std::get<osrm::json::Object>(r);
                 ParseResult(status, json_result);
                 if (pluginParams.renderToBuffer)
                 {
@@ -181,7 +160,7 @@ inline void async(const Nan::FunctionCallbackInfo<v8::Value> &info,
             {
                 osrm::engine::api::ResultT r = flatbuffers::FlatBufferBuilder();
                 const auto status = ((*osrm).*(service))(*params, r);
-                const auto &fbs_result = r.get<flatbuffers::FlatBufferBuilder>();
+                const auto &fbs_result = std::get<flatbuffers::FlatBufferBuilder>(r);
                 ParseResult(status, fbs_result);
                 BOOST_ASSERT(pluginParams.renderToBuffer);
                 std::string result_str(
@@ -194,17 +173,14 @@ inline void async(const Nan::FunctionCallbackInfo<v8::Value> &info,
         }
         catch (const std::exception &e)
         {
-            SetErrorMessage(e.what());
+            SetError(e.what());
         }
 
-        void HandleOKCallback() override
+        void OnOK() override
         {
-            Nan::HandleScope scope;
+            Napi::HandleScope scope{Env()};
 
-            const constexpr auto argc = 2u;
-            v8::Local<v8::Value> argv[argc] = {Nan::Null(), render(result)};
-
-            callback->Call(argc, argv, async_resource);
+            Callback().Call({Env().Null(), render(Env(), result)});
         }
 
         // Keeps the OSRM object alive even after shutdown until we're done with callback
@@ -216,13 +192,14 @@ inline void async(const Nan::FunctionCallbackInfo<v8::Value> &info,
         ObjectOrString result;
     };
 
-    auto *callback = new Nan::Callback{info[info.Length() - 1].As<v8::Function>()};
-    Nan::AsyncQueueWorker(
-        new Worker{self->this_, std::move(params), service, callback, std::move(pluginParams)});
+    Napi::Function callback = info[info.Length() - 1].As<Napi::Function>();
+    auto worker =
+        new Worker(self->this_, std::move(params), service, callback, std::move(pluginParams));
+    worker->Queue();
 }
 
 template <typename ParameterParser, typename ServiceMemFn>
-inline void asyncForTiles(const Nan::FunctionCallbackInfo<v8::Value> &info,
+inline void asyncForTiles(const Napi::CallbackInfo &info,
                           ParameterParser argsToParams,
                           ServiceMemFn service,
                           bool requires_multiple_coordinates)
@@ -235,22 +212,21 @@ inline void asyncForTiles(const Nan::FunctionCallbackInfo<v8::Value> &info,
 
     BOOST_ASSERT(params->IsValid());
 
-    if (!info[info.Length() - 1]->IsFunction())
-        return Nan::ThrowTypeError("last argument must be a callback function");
+    if (!info[info.Length() - 1].IsFunction())
+        return ThrowTypeError(info.Env(), "last argument must be a callback function");
 
-    auto *const self = Nan::ObjectWrap::Unwrap<Engine>(info.Holder());
+    auto *const self = Napi::ObjectWrap<Engine>::Unwrap(info.This().As<Napi::Object>());
     using ParamPtr = decltype(params);
 
-    struct Worker final : Nan::AsyncWorker
+    struct Worker final : Napi::AsyncWorker
     {
         Worker(std::shared_ptr<osrm::OSRM> osrm_,
                ParamPtr params_,
                ServiceMemFn service,
-               Nan::Callback *callback,
+               Napi::Function callback,
                PluginParameters pluginParams_)
-            : Nan::AsyncWorker(callback, "osrm:asyncForTiles"), osrm{std::move(osrm_)},
-              service{std::move(service)}, params{std::move(params_)}, pluginParams{
-                                                                           std::move(pluginParams_)}
+            : Napi::AsyncWorker(callback), osrm{std::move(osrm_)}, service{std::move(service)},
+              params{std::move(params_)}, pluginParams{std::move(pluginParams_)}
         {
         }
 
@@ -259,23 +235,19 @@ inline void asyncForTiles(const Nan::FunctionCallbackInfo<v8::Value> &info,
         {
             result = std::string();
             const auto status = ((*osrm).*(service))(*params, result);
-            auto str_result = result.get<std::string>();
+            auto str_result = std::get<std::string>(result);
             ParseResult(status, str_result);
         }
         catch (const std::exception &e)
         {
-            SetErrorMessage(e.what());
+            SetError(e.what());
         }
 
-        void HandleOKCallback() override
+        void OnOK() override
         {
-            Nan::HandleScope scope;
+            Napi::HandleScope scope{Env()};
 
-            const constexpr auto argc = 2u;
-            auto str_result = result.get<std::string>();
-            v8::Local<v8::Value> argv[argc] = {Nan::Null(), render(str_result)};
-
-            callback->Call(argc, argv, async_resource);
+            Callback().Call({Env().Null(), render(Env(), std::get<std::string>(result))});
         }
 
         // Keeps the OSRM object alive even after shutdown until we're done with callback
@@ -287,9 +259,10 @@ inline void asyncForTiles(const Nan::FunctionCallbackInfo<v8::Value> &info,
         osrm::engine::api::ResultT result;
     };
 
-    auto *callback = new Nan::Callback{info[info.Length() - 1].As<v8::Function>()};
-    Nan::AsyncQueueWorker(
-        new Worker{self->this_, std::move(params), service, callback, std::move(pluginParams)});
+    Napi::Function callback = info[info.Length() - 1].As<Napi::Function>();
+    auto worker =
+        new Worker(self->this_, std::move(params), service, callback, std::move(pluginParams));
+    worker->Queue();
 }
 
 // clang-format off
@@ -314,7 +287,7 @@ inline void asyncForTiles(const Nan::FunctionCallbackInfo<v8::Value> &info,
  * @param {String} [options.geometries=polyline] Returned route geometry format (influences overview and per step). Can also be `geojson`.
  * @param {String} [options.overview=simplified] Add overview geometry either `full`, `simplified` according to highest zoom level it could be display on, or not at all (`false`).
  * @param {Boolean} [options.continue_straight] Forces the route to keep going straight at waypoints and don't do a uturn even if it would be faster. Default value depends on the profile.
- * @param {Array} [options.approaches] Keep waypoints on curb side. Can be `null` (unrestricted, default) or `curb`.
+ * @param {Array} [options.approaches] Restrict the direction on the road network at a waypoint, relative to the input coordinate. Can be `null` (unrestricted, default), `curb` or `opposite`.
  *                  `null`/`true`/`false`
  * @param {Array} [options.waypoints] Indices to coordinates to treat as waypoints. If not supplied, all coordinates are waypoints.  Must include first and last coordinate index.
  * @param {String} [options.format] Which output format to use, either `json`, or [`flatbuffers`](https://github.com/Project-OSRM/osrm-backend/tree/master/include/engine/api/flatbuffers).
@@ -333,12 +306,13 @@ inline void asyncForTiles(const Nan::FunctionCallbackInfo<v8::Value> &info,
  * });
  */
 // clang-format on
-NAN_METHOD(Engine::route) //
+Napi::Value Engine::route(const Napi::CallbackInfo &info)
 {
     osrm::Status (osrm::OSRM::*route_fn)(const osrm::RouteParameters &params,
                                          osrm::engine::api::ResultT &result) const =
         &osrm::OSRM::Route;
     async(info, &argumentsToRouteParameter, route_fn, true);
+    return info.Env().Undefined();
 }
 
 // clang-format off
@@ -358,7 +332,7 @@ NAN_METHOD(Engine::route) //
  * @param {Boolean} [options.generate_hints=true]  Whether or not adds a Hint to the response which can be used in subsequent requests.
  * @param {Number} [options.number=1] Number of nearest segments that should be returned.
  * Must be an integer greater than or equal to `1`.
- * @param {Array} [options.approaches] Keep waypoints on curb side. Can be `null` (unrestricted, default) or `curb`.
+ * @param {Array} [options.approaches] Restrict the direction on the road network at a waypoint, relative to the input coordinate. Can be `null` (unrestricted, default), `curb` or `opposite`.
  * @param {String} [options.format] Which output format to use, either `json`, or [`flatbuffers`](https://github.com/Project-OSRM/osrm-backend/tree/master/include/engine/api/flatbuffers).
  * @param {String} [options.snapping] Which edges can be snapped to, either `default`, or `any`.  `default` only snaps to edges marked by the profile as `is_startpoint`, `any` will allow snapping to any edge in the routing graph.
  * @param {Function} callback
@@ -379,12 +353,13 @@ NAN_METHOD(Engine::route) //
  * });
  */
 // clang-format on
-NAN_METHOD(Engine::nearest) //
+Napi::Value Engine::nearest(const Napi::CallbackInfo &info)
 {
     osrm::Status (osrm::OSRM::*nearest_fn)(const osrm::NearestParameters &params,
                                            osrm::engine::api::ResultT &result) const =
         &osrm::OSRM::Nearest;
     async(info, &argumentsToNearestParameter, nearest_fn, false);
+    return info.Env().Undefined();
 }
 
 // clang-format off
@@ -404,13 +379,12 @@ NAN_METHOD(Engine::nearest) //
  * @param {Array} [options.sources] An array of `index` elements (`0 <= integer < #coordinates`) to use
  *                                  location with given index as source. Default is to use all.
  * @param {Array} [options.destinations] An array of `index` elements (`0 <= integer < #coordinates`) to use location with given index as destination. Default is to use all.
- * @param {Array} [options.approaches] Keep waypoints on curb side. Can be `null` (unrestricted, default) or `curb`.
+ * @param {Array} [options.approaches] Restrict the direction on the road network at a waypoint, relative to the input coordinate.. Can be `null` (unrestricted, default), `curb` or `opposite`.
  * @param {Number} [options.fallback_speed] Replace `null` responses in result with as-the-crow-flies estimates based on `fallback_speed`.  Value is in metres/second.
  * @param {String} [options.fallback_coordinate] Either `input` (default) or `snapped`.  If using a `fallback_speed`, use either the user-supplied coordinate (`input`), or the snapped coordinate (`snapped`) for calculating the as-the-crow-flies distance between two points.
  * @param {Number} [options.scale_factor] Multiply the table duration values in the table by this number for more controlled input into a route optimization solver.
  * @param {String} [options.snapping] Which edges can be snapped to, either `default`, or `any`.  `default` only snaps to edges marked by the profile as `is_startpoint`, `any` will allow snapping to any edge in the routing graph.
  * @param {Array} [options.annotations] Return the requested table or tables in response. Can be `['duration']` (return the duration matrix, default), `[distance']` (return the distance matrix), or `['duration', distance']` (return both the duration matrix and the distance matrix).
-
  * @param {Function} callback
  *
  * @returns {Object} containing `durations`, `distances`, `sources`, and `destinations`.
@@ -439,12 +413,13 @@ NAN_METHOD(Engine::nearest) //
  * });
  */
 // clang-format on
-NAN_METHOD(Engine::table) //
+Napi::Value Engine::table(const Napi::CallbackInfo &info)
 {
     osrm::Status (osrm::OSRM::*table_fn)(const osrm::TableParameters &params,
                                          osrm::engine::api::ResultT &result) const =
         &osrm::OSRM::Table;
     async(info, &argumentsToTableParameter, table_fn, true);
+    return info.Env().Undefined();
 }
 
 // clang-format off
@@ -473,12 +448,13 @@ NAN_METHOD(Engine::table) //
  * });
  */
 // clang-format on
-NAN_METHOD(Engine::tile)
+Napi::Value Engine::tile(const Napi::CallbackInfo &info)
 {
     osrm::Status (osrm::OSRM::*tile_fn)(const osrm::TileParameters &params,
                                         osrm::engine::api::ResultT &result) const =
         &osrm::OSRM::Tile;
     asyncForTiles(info, &argumentsToTileParameters, tile_fn, {/*unused*/});
+    return info.Env().Undefined();
 }
 
 // clang-format off
@@ -512,7 +488,7 @@ NAN_METHOD(Engine::tile)
  *
  * @returns {Object} containing `tracepoints` and `matchings`.
  * **`tracepoints`** Array of [`Ẁaypoint`](#waypoint) objects representing all points of the trace in order.
- *                   If the trace point was ommited by map matching because it is an outlier, the entry will be null.
+ *                   If the trace point was omitted by map matching because it is an outlier, the entry will be null.
  *                   Each `Waypoint` object has the following additional properties,
  *                   1) `matchings_index`: Index to the
  *                   [`Route`](#route) object in matchings the sub-trace was matched to,
@@ -536,12 +512,13 @@ NAN_METHOD(Engine::tile)
  *
  */
 // clang-format on
-NAN_METHOD(Engine::match) //
+Napi::Value Engine::match(const Napi::CallbackInfo &info)
 {
     osrm::Status (osrm::OSRM::*match_fn)(const osrm::MatchParameters &params,
                                          osrm::engine::api::ResultT &result) const =
         &osrm::OSRM::Match;
     async(info, &argumentsToMatchParameter, match_fn, true);
+    return info.Env().Undefined();
 }
 
 // clang-format off
@@ -583,7 +560,7 @@ NAN_METHOD(Engine::match) //
  * @param {Boolean} [options.roundtrip=true] Return route is a roundtrip.
  * @param {String} [options.source=any] Return route starts at `any` or `first` coordinate.
  * @param {String} [options.destination=any] Return route ends at `any` or `last` coordinate.
- * @param {Array} [options.approaches] Keep waypoints on curb side. Can be `null` (unrestricted, default) or `curb`.
+ * @param {Array} [options.approaches] Restrict the direction on the road network at a waypoint, relative to the input coordinate. Can be `null` (unrestricted, default), `curb` or `opposite`.
  * @param {String} [options.snapping] Which edges can be snapped to, either `default`, or `any`. `default` only snaps to edges marked by the profile as `is_startpoint`, `any` will allow snapping to any edge in the routing graph.
  *
  * @returns {Object} containing `waypoints` and `trips`.
@@ -611,12 +588,13 @@ NAN_METHOD(Engine::match) //
  * });
  */
 // clang-format on
-NAN_METHOD(Engine::trip) //
+Napi::Value Engine::trip(const Napi::CallbackInfo &info)
 {
     osrm::Status (osrm::OSRM::*trip_fn)(const osrm::TripParameters &params,
                                         osrm::engine::api::ResultT &result) const =
         &osrm::OSRM::Trip;
     async(info, &argumentsToTripParameter, trip_fn, true);
+    return info.Env().Undefined();
 }
 
 /**
@@ -710,3 +688,10 @@ NAN_METHOD(Engine::trip) //
  */
 
 } // namespace node_osrm
+
+Napi::Object InitAll(Napi::Env env, Napi::Object exports)
+{
+    return node_osrm::Engine::Init(env, exports);
+}
+
+NODE_API_MODULE(addon, InitAll)

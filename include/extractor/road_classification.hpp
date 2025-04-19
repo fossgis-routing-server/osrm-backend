@@ -2,16 +2,14 @@
 #define OSRM_EXTRACTOR_CLASSIFICATION_DATA_HPP_
 
 #include "extractor/intersection/constants.hpp"
-#include <algorithm>
+
 #include <boost/assert.hpp>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
 #include <string>
 
-namespace osrm
-{
-namespace extractor
+namespace osrm::extractor
 {
 
 // Priorities are used to distinguish between how likely a turn is in comparison to a different
@@ -20,7 +18,7 @@ namespace extractor
 // guidance constants.
 namespace RoadPriorityClass
 {
-typedef std::uint8_t Enum;
+using Enum = std::uint8_t;
 // Top priority Road
 const constexpr Enum MOTORWAY = 0;
 const constexpr Enum MOTORWAY_LINK = 1;
@@ -101,7 +99,7 @@ class RoadClassification
     std::uint8_t GetNumberOfLanes() const { return number_of_lanes; }
     void SetNumberOfLanes(const std::uint8_t new_value) { number_of_lanes = new_value; }
 
-    std::uint32_t GetPriority() const { return static_cast<std::uint32_t>(road_priority_class); }
+    RoadPriorityClass::Enum GetPriority() const { return road_priority_class; }
 
     RoadPriorityClass::Enum GetClass() const { return road_priority_class; }
     void SetClass(const RoadPriorityClass::Enum new_value) { road_priority_class = new_value; }
@@ -223,7 +221,6 @@ inline bool obviousByRoadClass(const RoadClassification in_classification,
             compare_candidate.IsLowPriorityRoadClass());
 }
 
-} // namespace extractor
-} // namespace osrm
+} // namespace osrm::extractor
 
 #endif // OSRM_EXTRACTOR_CLASSIFICATION_DATA_HPP_
