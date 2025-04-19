@@ -1,6 +1,7 @@
 #ifndef REQUEST_HPP
 #define REQUEST_HPP
 
+#include <utility>
 #include <boost/asio.hpp>
 
 #include <string>
